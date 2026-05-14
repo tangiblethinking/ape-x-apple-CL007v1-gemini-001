@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>[YOUR FULL NAME] – [YOUR JOB TITLE]</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue: #2563c7;
+      --dark: #111111;
+      --mid: #444444;
+      --light: #666666;
+      --rule: #dddddd;
+      --green: #00A000;
+      --bg-tint: #f7f8fa;
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 10.5pt;
+      color: var(--dark);
+      background: #e8e8e8;
+      display: flex;
+      justify-content: center;
+      padding: 32px 16px;
+      min-height: 100vh;
+    }
+
+    .page {
+      background: #fff;
+      width: 680px;
+      max-width: 100%;
+      box-shadow: 0 4px 40px rgba(0,0,0,0.15);
+    }
+
+    /* ── HEADER ── */
+    header {
+      padding: 28px 36px 20px;
+      border-bottom: 2px solid var(--rule);
+    }
+    header h1 {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 28pt;
+      font-weight: 400;
+      color: var(--dark);
+      letter-spacing: -0.5px;
+      line-height: 1.1;
+    }
+    .title-line {
+      font-size: 10pt;
+      font-weight: 700;
+      color: var(--blue);
+      margin: 5px 0 10px;
+    }
+    .contact {
+      font-size: 9pt;
+      color: var(--mid);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 10px;
+    }
+    .contact .phone { color: #212121; font-weight: 700; }
+    .contact .sep   { color: var(--rule); }
+    .contact a      { color: var(--blue); text-decoration: none; font-weight: 600; }
+    .contact a:hover { text-decoration: underline; }
+
+    /* ── SECTIONS ── */
+    .section {
+      padding: 22px 36px;
+      border-bottom: 1px solid var(--rule);
+    }
+    .section:last-child { border-bottom: none; }
+
+    .section-title {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 14pt;
+      font-weight: 400;
+      color: var(--dark);
+      border-bottom: 1.5px solid var(--dark);
+      padding-bottom: 4px;
+      margin-bottom: 14px;
+    }
+
+    /* ── SUMMARY ── */
+    .summary-quote {
+      font-size: 9.5pt;
+      font-style: italic;
+      font-weight: 700;
+      color: #212121;
+      line-height: 1.65;
+      margin-bottom: 10px;
+    }
+    .summary-bullets {
+      list-style: disc;
+      padding-left: 17px;
+    }
+    .summary-bullets li {
+      font-size: 9pt;
+      color: var(--mid);
+      line-height: 1.55;
+      margin-bottom: 3px;
+    }
+
+    /* ── EXPERIENCE ── */
+    .job { margin-bottom: 20px; }
+    .job:last-child { margin-bottom: 0; }
+
+    .job-title {
+      font-size: 10.5pt;
+      font-weight: 700;
+      color: var(--dark);
+    }
+    .job-company {
+      display: block;
+      font-size: 10pt;
+      font-weight: 500;
+      color: var(--blue);
+      text-decoration: none;
+    }
+    .job-company:hover { text-decoration: underline; }
+
+    .job-meta {
+      font-size: 8.5pt;
+      color: var(--light);
+      margin: 3px 0 7px;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .job-meta svg {
+      width: 13px;
+      height: 13px;
+      fill: var(--green);
+      flex-shrink: 0;
+      position: relative;
+      top: -1px;
+    }
+    .meta-dot { color: var(--rule); margin: 0 2px; }
+
+    .job ul {
+      list-style: disc;
+      padding-left: 17px;
+    }
+    .job ul li {
+      font-size: 9.5pt;
+      color: var(--mid);
+      line-height: 1.5;
+      margin-bottom: 3px;
+    }
+
+    /* ── KEY ACHIEVEMENTS ── */
+    .dot-list {
+      list-style: disc;
+      padding-left: 17px;
+    }
+    .dot-list li {
+      font-size: 9.5pt;
+      color: var(--mid);
+      line-height: 1.65;
+    }
+
+    /* ── SKILLS / AI ── */
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .tag {
+      font-size: 8pt;
+      font-weight: 500;
+      color: var(--blue);
+      background: rgba(37,99,199,0.09);
+      border-radius: 3px;
+      padding: 3px 8px;
+    }
+
+    /* ── EDUCATION ── */
+    .edu-degree { font-size: 10pt; font-weight: 700; color: var(--dark); }
+    .edu-school  { font-size: 9.5pt; font-weight: 500; color: var(--blue); margin-top: 2px; }
+    .edu-meta {
+      font-size: 8.5pt;
+      color: var(--light);
+      margin-top: 5px;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .edu-meta svg {
+      width: 13px;
+      height: 13px;
+      fill: var(--green);
+      flex-shrink: 0;
+      position: relative;
+      top: -1px;
+    }
+
+    /* ── MOBILE ── */
+    @media (max-width: 580px) {
+      body { padding: 0; background: #fff; }
+      .page { box-shadow: none; }
+      header { padding: 20px 18px 16px; }
+      header h1 { font-size: 22pt; }
+      .title-line { font-size: 9pt; }
+      .section { padding: 18px 18px; }
+      .section-title { font-size: 13pt; }
+      .job ul li, .summary-bullets li, .dot-list li { font-size: 9pt; }
+    }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .page { box-shadow: none; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ============================================================
+       HEADER
+       ============================================================ -->
+  <header>
+    <!-- EDIT: Your full name -->
+    <h1>[YOUR FULL NAME]</h1>
+    <!-- EDIT: Your job title / headline | Key skills / descriptors separated by | -->
+    <div class="title-line">[JOB TITLE] | [DESCRIPTOR 1] | [DESCRIPTOR 2] | [DESCRIPTOR 3] | [DESCRIPTOR 4]</div>
+    <div class="contact">
+      <!-- EDIT: Phone number -->
+      <span class="phone">[PHONE NUMBER]</span>
+      <span class="sep">|</span>
+      <!-- EDIT: Email address (both in href and display text) -->
+      <a href="mailto:[EMAIL ADDRESS]">[EMAIL ADDRESS]</a>
+      <span class="sep">|</span>
+      <!-- EDIT: LinkedIn profile URL -->
+      <a href="[LINKEDIN URL]" target="_blank">LinkedIn</a>
+      <span class="sep">|</span>
+      <!-- EDIT: Portfolio URL -->
+      <a href="[PORTFOLIO URL]" target="_blank">Portfolio</a>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       SUMMARY
+       ============================================================ -->
+  <div class="section">
+    <h2 class="section-title">Summary</h2>
+    <!-- EDIT: A bold italic summary quote — your professional thesis in 1–2 sentences -->
+    <p class="summary-quote">"[YOUR SUMMARY QUOTE — a bold, first-person professional thesis. Describe your leadership style, years of experience, and the type of work you deliver.]"</p>
+    <ul class="summary-bullets">
+      <!-- EDIT: 5–7 bullet points. Each should highlight a distinct strength,
+           experience area, or measurable outcome. Replace all items below. -->
+      <li>[Years] years of [describe core discipline] across [types of industries or platforms]</li>
+      <li>[People management or leadership highlight — team size, responsibilities, outcomes]</li>
+      <li>[Systems thinking or architectural capability with a quantified result]</li>
+      <li>[How you handle ambiguity, strategy, or complex problem-solving]</li>
+      <li>[Cross-functional collaboration strength — who you align and how]</li>
+      <li>[Emerging technology or specialized practice — what you actively use in production]</li>
+      <li>[Operations or process improvement — a measurable delivery or efficiency gain]</li>
+    </ul>
+  </div>
+
+  <!-- ============================================================
+       EXPERIENCE
+       Add or remove <div class="job"> blocks as needed.
+       Each block follows the same structure: title, company link,
+       date/location meta, then bullet points.
+       ============================================================ -->
+  <div class="section">
+    <h2 class="section-title">Experience</h2>
+
+    <!-- JOB 1 — Most Recent -->
+    <div class="job">
+      <!-- EDIT: Your job title -->
+      <div class="job-title">[JOB TITLE]</div>
+      <!-- EDIT: Company name and website URL -->
+      <a class="job-company" href="[COMPANY WEBSITE URL]" target="_blank">[COMPANY NAME]</a>
+      <div class="job-meta">
+        <svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5C3.9 4 3 4.9 3 6v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
+        <!-- EDIT: Start date – End date (or "Present") -->
+        [MM/YYYY] – [MM/YYYY or Present]
+        <span class="meta-dot">·</span>
+        <!-- EDIT: Remote / Hybrid / Office -->
+        [Remote / Hybrid / Office]
+      </div>
+      <ul>
+        <!-- EDIT: 4–6 bullet points. Lead with scope, then outcomes.
+             Use <strong> to emphasize a sub-category or metric. -->
+        <li>[Describe team leadership scope — team size, regions, deliverable types, responsibilities]</li>
+        <li>[Product strategy or business outcome — what you drove and the measurable result]</li>
+        <li>[Cross-functional process or workflow — how you collaborated and what it produced]</li>
+        <li><strong>[Sub-category label, e.g. "Design Ops &amp; Systems"]:</strong> [Describe a systems or operational initiative with quantified adoption, efficiency, or cost impact]</li>
+        <li>[Business turnaround, revenue, or margin impact — describe the initiative and outcome]</li>
+        <li>[Technology adoption or team capability growth — what you introduced and its effect]</li>
+      </ul>
+    </div>
+
+    <!-- JOB 2 -->
+    <div class="job">
+      <!-- EDIT: Job title -->
+      <div class="job-title">[JOB TITLE]</div>
+      <!-- EDIT: Company name and URL -->
+      <a class="job-company" href="[COMPANY WEBSITE URL]" target="_blank">[COMPANY NAME]</a>
+      <div class="job-meta">
+        <svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5C3.9 4 3 4.9 3 6v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
+        <!-- EDIT: Dates and location type -->
+        [MM/YYYY] – [MM/YYYY]
+        <span class="meta-dot">·</span>
+        [Remote / Hybrid / Office]
+      </div>
+      <ul>
+        <!-- EDIT: 3–5 bullet points -->
+        <li>[Core deliverable and measurable efficiency or quality improvement]</li>
+        <li>[Discovery or alignment work — workshops, stakeholder presentations, approvals secured]</li>
+        <li>[System or architecture built — tech stack, platforms, adoption, documentation]</li>
+        <li>[Product strategy or cross-team contribution in a complex environment]</li>
+      </ul>
+    </div>
+
+    <!-- JOB 3 -->
+    <div class="job">
+      <!-- EDIT: Job title -->
+      <div class="job-title">[JOB TITLE]</div>
+      <!-- EDIT: Company name and URL -->
+      <a class="job-company" href="[COMPANY WEBSITE URL]" target="_blank">[COMPANY NAME]</a>
+      <div class="job-meta">
+        <svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5C3.9 4 3 4.9 3 6v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
+        <!-- EDIT: Dates and location type -->
+        [MM/YYYY] – [MM/YYYY]
+        <span class="meta-dot">·</span>
+        [Remote / Hybrid / Office]
+      </div>
+      <ul>
+        <!-- EDIT: 3–4 bullet points -->
+        <li>[Executive buy-in, budget secured, or design culture initiative]</li>
+        <li>[UI redesign or workflow improvement with a task completion or efficiency metric]</li>
+        <li>[Compliance or regulatory design contribution]</li>
+        <li>[E-commerce or consumer journey improvement with a quantified result]</li>
+      </ul>
+    </div>
+
+    <!-- JOB 4 -->
+    <div class="job">
+      <!-- EDIT: Job title -->
+      <div class="job-title">[JOB TITLE]</div>
+      <!-- EDIT: Company name and URL -->
+      <a class="job-company" href="[COMPANY WEBSITE URL]" target="_blank">[COMPANY NAME]</a>
+      <div class="job-meta">
+        <svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5C3.9 4 3 4.9 3 6v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
+        <!-- EDIT: Dates and location type -->
+        [MM/YYYY] – [MM/YYYY]
+        <span class="meta-dot">·</span>
+        [Remote / Hybrid / Office]
+      </div>
+      <ul>
+        <!-- EDIT: 3 bullet points -->
+        <li>[Design system or cross-product unification effort — scope and efficiency impact]</li>
+        <li>[Specialized or technical UI work — describe the domain and what made it complex]</li>
+        <li>[Project planning or stakeholder alignment — what you drove and what was approved]</li>
+      </ul>
+    </div>
+
+    <!-- JOB 5 — Earliest / Add more blocks above if needed -->
+    <div class="job">
+      <!-- EDIT: Job title -->
+      <div class="job-title">[JOB TITLE]</div>
+      <!-- EDIT: Company name and URL -->
+      <a class="job-company" href="[COMPANY WEBSITE URL]" target="_blank">[COMPANY NAME]</a>
+      <div class="job-meta">
+        <svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5C3.9 4 3 4.9 3 6v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
+        <!-- EDIT: Dates and location type -->
+        [MM/YYYY] – [MM/YYYY]
+        <span class="meta-dot">·</span>
+        [Remote / Hybrid / Office]
+      </div>
+      <ul>
+        <!-- EDIT: 3 bullet points -->
+        <li>[Accessibility or compliance design contribution — standard met, platforms covered]</li>
+        <li>[Research-driven design — methods used and improvement metric]</li>
+        <li>[Workshop or cross-functional alignment — Design Thinking, product strategy, etc.]</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- ============================================================
+       KEY ACHIEVEMENTS
+       5 standalone, quantified wins. One per line.
+       ============================================================ -->
+  <div class="section">
+    <h2 class="section-title">Key Achievements</h2>
+    <ul class="dot-list">
+      <!-- EDIT: Replace each bullet with a crisp, quantified achievement.
+           Format: [Category or label]: [metric] — [brief context] -->
+      <li>[Achievement 1: metric + what you did to produce it]</li>
+      <li>[Achievement 2: metric + what you did to produce it]</li>
+      <li>[Achievement 3: metric + what you did to produce it]</li>
+      <li>[Achievement 4: metric + what you did to produce it]</li>
+      <li>[Achievement 5: metric + what you did to produce it]</li>
+    </ul>
+  </div>
+
+  <!-- ============================================================
+       SKILLS
+       Add or remove <span class="tag"> elements as needed.
+       ============================================================ -->
+  <div class="section">
+    <h2 class="section-title">Skills</h2>
+    <div class="tag-list">
+      <!-- EDIT: Replace with your own skills. Add or remove tags freely. -->
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+      <span class="tag">[Skill or Tool]</span>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       AI & EMERGING TECHNOLOGY
+       Keep this section if relevant; delete if not.
+       ============================================================ -->
+  <div class="section">
+    <h2 class="section-title">AI &amp; Emerging Technology</h2>
+    <div class="tag-list">
+      <!-- EDIT: Replace with your own AI/tech skills. Add or remove tags freely. -->
+      <span class="tag">[AI / Tech Skill]</span>
+      <span class="tag">[AI / Tech Skill]</span>
+      <span class="tag">[AI / Tech Skill]</span>
+      <span class="tag">[AI / Tech Skill]</span>
+      <span class="tag">[AI / Tech Skill]</span>
+      <span class="tag">[AI / Tech Skill]</span>
+      <span class="tag">[AI / Tech Skill]</span>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       EDUCATION & CERTIFICATIONS
+       ============================================================ -->
+  <div class="section">
+    <h2 class="section-title">Education &amp; Certifications</h2>
+    <!-- EDIT: Degree name -->
+    <div class="edu-degree">[DEGREE NAME — e.g. Bachelor of Art – Information Design &amp; Technology]</div>
+    <!-- EDIT: School name -->
+    <div class="edu-school">[SCHOOL / INSTITUTION NAME]</div>
+    <div class="edu-meta">
+      <svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5C3.9 4 3 4.9 3 6v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
+      <!-- EDIT: Enrollment start and end dates -->
+      [MM/YYYY] – [MM/YYYY]
+    </div>
+    <!-- EDIT: List any additional certifications, courses, or professional development.
+         Format: Certification Name (Issuer, Score if notable) · Next Cert · etc. -->
+    <div style="margin-top:12px; font-size:9pt; color:var(--mid); line-height:1.6;">
+      <strong style="color:var(--dark);">Additional:</strong> [Certification 1 (Issuer, Score)] · [Certification 2 (Issuer, Score)] · [Certification 3 (Issuer)] · [Certification 4] · [Certification 5]
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
