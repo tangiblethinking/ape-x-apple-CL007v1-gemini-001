@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { callAI, AIProvider } from '../../lib/ai-providers';
+import { callAI, extractJSON, AIProvider } from '../../lib/ai-providers';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -13,7 +13,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const systemPrompt = `You are a resume parser. Extract structured profile data from the resume text provided.
 
-Return ONLY a valid JSON object with exactly these fields:
+Return ONLY a valid JSON object with exactly these fields — no explanation, no markdown, no preamble:
 {
   "name": "Full Name or empty string",
   "email": "email@example.com or empty string",
@@ -25,23 +25,15 @@ Return ONLY a valid JSON object with exactly these fields:
   "mostRecentEmployer": "Most recent company name or empty string",
   "yearsExperience": "Estimated total years of experience as a number string e.g. '12' or empty string",
   "coreStrengths": "Comma-separated list of 4-8 key skills and specialties extracted from resume or empty string",
-  "discipline": "The candidate's primary professional discipline e.g. UX Design, Product Management, Software Engineering — infer from roles and skills or empty string",
-  "targetTitles": ["Array of job titles the candidate should target — include their most recent title AND 3-5 titles one level more senior, based on standard career progression in their specific field. Infer entirely from their work history and roles. Return 4-6 titles total."],
-  "targetSectors": ["Array of industry sectors relevant to the candidate based on their work history e.g. Fintech, Healthcare, SaaS, Retail. Infer from employers and roles only."],
+  "discipline": "The candidate's primary professional discipline e.g. UX Design, Product Management, Software Engineering or empty string",
+  "targetTitles": ["Array of 4-6 job titles — current level plus 3-5 titles one level more senior"],
+  "targetSectors": ["Array of industry sectors relevant to the candidate based on their work history"],
   "salaryMin": 0,
   "salaryMax": 0,
   "additionalUrlsFound": ["any other URLs found in the resume beyond LinkedIn and portfolio"]
 }
 
-Rules:
-- Use empty string "" for text fields not found, 0 for salary numbers not found
-- For yearsExperience: calculate from work history dates if not stated explicitly
-- For targetTitles: always include titles ONE LEVEL SENIOR to most recent role based on standard career progression in their specific field — do not assume any particular industry or domain
-- For discipline: be specific to their actual field — infer only from their resume content, do not assume
-- For targetSectors: infer from their employers and roles only — return empty array if unclear
-- For salary: only populate if explicitly stated in resume, otherwise use 0
-- Strip https:// and www. from linkedinUrl and portfolioUrl
-- Return ONLY the JSON object, no markdown, no explanation`;
+CRITICAL: Output ONLY the JSON object. No text before or after. No markdown code fences.`;
 
   try {
     const aiResponse = await callAI(
@@ -49,20 +41,25 @@ Rules:
       apiKey,
       [{ role: 'user', content: `Extract profile data from this resume:\n\n${resumeText.slice(0, 10000)}` }],
       systemPrompt,
-      1500
+      2000
     );
 
     if (aiResponse.error) {
-      return res.status(500).json({ error: aiResponse.error });
+      return res.status(500).json({ error: `AI extraction failed: ${aiResponse.error}` });
     }
 
-    const cleaned = aiResponse.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    // Use robust JSON extractor — handles markdown fences, prose wrapping, etc.
+    const jsonStr = extractJSON(aiResponse.text);
 
     let profile;
     try {
-      profile = JSON.parse(cleaned);
+      profile = JSON.parse(jsonStr);
     } catch {
-      return res.status(500).json({ error: 'Failed to parse extracted profile data.' });
+      // Return the raw text so the client can at least see what came back
+      return res.status(500).json({
+        error: 'Could not parse AI response as JSON. Try again.',
+        rawResponse: aiResponse.text.slice(0, 500),
+      });
     }
 
     return res.status(200).json({ profile });

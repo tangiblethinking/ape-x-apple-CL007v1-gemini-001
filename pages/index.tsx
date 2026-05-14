@@ -277,6 +277,13 @@ function SetupWizard({initialProfile,initialAnthropicKey,initialSerperKey,initia
   onOpenHowTo:()=>void;
 }) {
   const [step,setStep]=useState(0);
+  const [maxVisitedStep,setMaxVisitedStep]=useState(0);
+
+  // Wrap setStep to track max visited
+  const goToStep=(n:number)=>{
+    setStep(n);
+    setMaxVisitedStep(m=>Math.max(m,n));
+  };
   const [profile,setProfile]=useState<CandidateProfile>({...initialProfile});
   const [wizAnthropicKey,setWizAnthropicKey]=useState(initialAnthropicKey);
   const [wizSerperKey,setWizSerperKey]=useState(initialSerperKey);
@@ -334,55 +341,63 @@ function SetupWizard({initialProfile,initialAnthropicKey,initialSerperKey,initia
   // Extract on Next click at resume step — runs extraction then advances
   const extractAndAdvance=async()=>{
     const text=resumeTextRef.current||getUploadedResume();
-    if(!text){setStep(s=>s+1);return;}
+    if(!text){goToStep(step+1);return;}
     setExtracting(true);
+    setUploadMsg('');
     try{
       const res=await fetch('/api/extract-profile',{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({resumeText:text,apiKeyOverride:wizAnthropicKey,aiProvider:wizProvider}),
       });
-      if(res.ok){
-        const data=await safeJson(res);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const ex: any =(data.profile as Record<string,unknown>)||{};
-        const found=new Set<string>();
-        // Map all extracted fields, track which ones were populated
-        setProfile(p=>{
-          const next={...p};
-          const trySet=(key:keyof CandidateProfile,val:unknown)=>{
-            if(val&&(Array.isArray(val)?val.length>0:String(val).trim())){
-              (next as Record<string,unknown>)[key]=val;
-              found.add(key);
-            }
-          };
-          trySet('name',ex.name);
-          trySet('email',ex.email);
-          trySet('phone',ex.phone);
-          trySet('linkedinUrl',ex.linkedinUrl);
-          trySet('portfolioUrl',ex.portfolioUrl);
-          trySet('mostRecentRole',ex.mostRecentRole);
-          trySet('mostRecentEmployer',ex.mostRecentEmployer);
-          trySet('yearsExperience',ex.yearsExperience);
-          trySet('coreStrengths',ex.coreStrengths);
-          trySet('discipline',ex.discipline);
-          trySet('targetTitles',ex.targetTitles);
-          trySet('targetSectors',ex.targetSectors);
-          if(ex.salaryMin>0){next.salaryMin=ex.salaryMin;found.add('salaryMin');}
-          if(ex.salaryMax>0){next.salaryMax=ex.salaryMax;found.add('salaryMax');}
-          // Additional links from resume
-          if(ex.additionalLinks?.length){
-            const existing=p.additionalLinks||[];
-            const merged=[...existing,...ex.additionalLinks.filter((l:{url:string})=>!existing.find((e:{url:string})=>e.url===l.url))];
-            next.additionalLinks=merged;
-            if(merged.length>existing.length) found.add('additionalLinks');
-          }
-          return next;
-        });
-        setExtractedFields(found);
+      const data=await safeJson(res);
+      if(!res.ok){
+        // Surface the error on the resume step — don't silently advance
+        setUploadMsg(`⚠ Extraction failed: ${(data.error as string)||'Unknown error'}. You can fill in your profile manually.`);
+        setExtracting(false);
+        goToStep(step+1);
+        return;
       }
-    }catch{/* silent fail — user fills manually */}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ex: any =(data.profile as Record<string,unknown>)||{};
+      const found=new Set<string>();
+      // Map all extracted fields, track which ones were populated
+      setProfile(p=>{
+        const next={...p};
+        const trySet=(key:keyof CandidateProfile,val:unknown)=>{
+          if(val&&(Array.isArray(val)?val.length>0:String(val).trim())){
+            (next as Record<string,unknown>)[key]=val;
+            found.add(key);
+          }
+        };
+        trySet('name',ex.name);
+        trySet('email',ex.email);
+        trySet('phone',ex.phone);
+        trySet('linkedinUrl',ex.linkedinUrl);
+        trySet('portfolioUrl',ex.portfolioUrl);
+        trySet('mostRecentRole',ex.mostRecentRole);
+        trySet('mostRecentEmployer',ex.mostRecentEmployer);
+        trySet('yearsExperience',ex.yearsExperience);
+        trySet('coreStrengths',ex.coreStrengths);
+        trySet('discipline',ex.discipline);
+        trySet('targetTitles',ex.targetTitles);
+        trySet('targetSectors',ex.targetSectors);
+        if(ex.salaryMin>0){next.salaryMin=ex.salaryMin;found.add('salaryMin');}
+        if(ex.salaryMax>0){next.salaryMax=ex.salaryMax;found.add('salaryMax');}
+        // Additional links from resume
+        if(ex.additionalLinks?.length){
+          const existing=p.additionalLinks||[];
+          const merged=[...existing,...ex.additionalLinks.filter((l:{url:string})=>!existing.find((e:{url:string})=>e.url===l.url))];
+          next.additionalLinks=merged;
+          if(merged.length>existing.length) found.add('additionalLinks');
+        }
+        return next;
+      });
+      setExtractedFields(found);
+    }catch(e:unknown){
+      setUploadMsg(`⚠ Connection error: ${e instanceof Error?e.message:'Unknown error'}. Fill in your profile manually.`);
+    }
     finally{setExtracting(false);}
-    setStep(s=>s+1);
+    goToStep(step+1);
   };
 
   const addLink=()=>{
@@ -573,7 +588,7 @@ function SetupWizard({initialProfile,initialAnthropicKey,initialSerperKey,initia
               placeholder={getAPIKeyPlaceholder(wizProvider)}
               note={getAPIKeyNote(wizProvider)}
             />
-            <button onClick={()=>setStep(0)} style={{marginTop:10,fontSize:12,color:'#007AFF',background:'none',border:'none',cursor:'pointer',textDecoration:'underline'}}>
+            <button onClick={()=>goToStep(0)} style={{marginTop:10,fontSize:12,color:'#007AFF',background:'none',border:'none',cursor:'pointer',textDecoration:'underline'}}>
               ← Change provider
             </button>
           </div>
@@ -678,7 +693,7 @@ function SetupWizard({initialProfile,initialAnthropicKey,initialSerperKey,initia
             {!wizCoverMeta&&coverUploadMsg&&<div style={{fontSize:12,color:coverUploadMsg.startsWith('✓')?'#1A7A3C':'#007AFF',marginTop:8,display:'flex',alignItems:'center',gap:5}}><CheckCircle size={13}/>{coverUploadMsg}</div>}
           </div>
 
-          <button onClick={()=>setStep(2)} style={{fontSize:13,color:'rgba(60,60,67,0.6)',background:'none',border:'none',cursor:'pointer',textDecoration:'underline'}}>
+          <button onClick={()=>goToStep(2)} style={{fontSize:13,color:'rgba(60,60,67,0.6)',background:'none',border:'none',cursor:'pointer',textDecoration:'underline'}}>
             Skip — fill in manually
           </button>
         </div>
@@ -885,12 +900,39 @@ function SetupWizard({initialProfile,initialAnthropicKey,initialSerperKey,initia
             <div style={{height:'100%',background:'#007AFF',borderRadius:2,width:`${pct}%`,transition:'width 0.3s ease'}}/>
           </div>
           <div style={{display:'flex',gap:6,marginTop:10}}>
-            {stepLabels.map((l,i)=>(
-              <div key={l} style={{flex:1,textAlign:'center'}}>
-                <div style={{height:3,borderRadius:2,background:i<=step?'#007AFF':'rgba(120,120,128,0.12)',marginBottom:4}}/>
-                <div style={{fontSize:9,color:i===step?'#007AFF':i<step?'rgba(60,60,67,0.6)':'rgba(60,60,67,0.3)',fontWeight:i===step?700:400}}>{l}</div>
-              </div>
-            ))}
+            {stepLabels.map((l,i)=>{
+              const isVisited=i<=maxVisitedStep;
+              const isActive=i===step;
+              const willNeedKeys=i>1&&!keysComplete;
+              const canClick=isVisited&&!isActive;
+              return (
+                <button
+                  key={l}
+                  onClick={()=>{
+                    if(!canClick) return;
+                    if(willNeedKeys){
+                      // Jump anyway but show warning via existing banner
+                    }
+                    goToStep(i);
+                  }}
+                  disabled={!canClick}
+                  title={canClick?(willNeedKeys?'API keys required for full functionality':'Jump to '+l):undefined}
+                  style={{
+                    flex:1,textAlign:'center',background:'none',border:'none',
+                    cursor:canClick?'pointer':'default',padding:'0 0 4px 0',
+                  }}
+                >
+                  <div style={{height:3,borderRadius:2,background:i<=step?'#007AFF':'rgba(120,120,128,0.12)',marginBottom:4,transition:'background 0.2s'}}/>
+                  <div style={{
+                    fontSize:9,
+                    color:isActive?'#007AFF':i<step?'rgba(60,60,67,0.6)':'rgba(60,60,67,0.3)',
+                    fontWeight:isActive?700:400,
+                    textDecoration:canClick&&!isActive?'underline':'none',
+                    textUnderlineOffset:2,
+                  }}>{l}</div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -913,7 +955,7 @@ function SetupWizard({initialProfile,initialAnthropicKey,initialSerperKey,initia
           <div style={{margin:'0 22px 14px',padding:'12px 16px',background:'rgba(255,149,0,0.08)',border:'0.5px solid rgba(255,149,0,0.3)',borderRadius:12,fontSize:12,color:'#B56000',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
             <AlertTriangle size={14} color="#007AFF"/>
             <span>API keys required to finish.</span>
-            <button onClick={()=>setStep(1)} style={{color:'#FF9500',background:'none',border:'none',cursor:'pointer',fontWeight:700,fontSize:12,textDecoration:'underline',padding:0}}>
+            <button onClick={()=>goToStep(1)} style={{color:'#FF9500',background:'none',border:'none',cursor:'pointer',fontWeight:700,fontSize:12,textDecoration:'underline',padding:0}}>
               Go to API Keys step
             </button>
             <span>·</span>
@@ -925,11 +967,11 @@ function SetupWizard({initialProfile,initialAnthropicKey,initialSerperKey,initia
 
         {/* Nav */}
         <div style={{padding:'14px 22px',borderTop:'0.5px solid rgba(60,60,67,0.18)',display:'flex',justifyContent:'space-between',position:'sticky',bottom:0,background:'rgba(255,255,255,0.97)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',borderRadius:'0 0 24px 24px'}}>
-          <button onClick={()=>step>0?setStep(s=>s-1):onClose()} style={{display:'flex',alignItems:'center',gap:5,padding:'10px 18px',background:'rgba(120,120,128,0.1)',border:'none',borderRadius:50,cursor:'pointer',fontWeight:600,fontSize:13,color:'#000'}}>
+          <button onClick={()=>step>0?goToStep(step-1):onClose()} style={{display:'flex',alignItems:'center',gap:5,padding:'10px 18px',background:'rgba(120,120,128,0.1)',border:'none',borderRadius:50,cursor:'pointer',fontWeight:600,fontSize:13,color:'#000'}}>
             <ChevronLeft size={14}/>{step===0?'Cancel':'Back'}
           </button>
           {!isLastStep
-            ?<button onClick={()=>step===2?extractAndAdvance():setStep(s=>s+1)} disabled={extracting} style={{display:'flex',alignItems:'center',gap:5,padding:'10px 22px',background:extracting?'#C7C7CC':'#007AFF',color:'#fff',border:'none',borderRadius:50,cursor:extracting?'not-allowed':'pointer',fontWeight:600,fontSize:13}}>
+            ?<button onClick={()=>step===2?extractAndAdvance():goToStep(step+1)} disabled={extracting} style={{display:'flex',alignItems:'center',gap:5,padding:'10px 22px',background:extracting?'#C7C7CC':'#007AFF',color:'#fff',border:'none',borderRadius:50,cursor:extracting?'not-allowed':'pointer',fontWeight:600,fontSize:13}}>
               Next<ChevronRight size={14}/>
             </button>
             :<div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:6}}>

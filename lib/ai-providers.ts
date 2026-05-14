@@ -62,56 +62,59 @@ async function callGeminiAPI(
   maxTokens = 16000
 ): Promise<AIResponse> {
   try {
-    // Gemini uses a different message format
-    // System prompt goes as first user message with special formatting
-    const contents = [];
-    
-    if (systemPrompt) {
-      contents.push({
-        role: 'user',
-        parts: [{ text: `[SYSTEM INSTRUCTIONS]\n${systemPrompt}\n\n[END SYSTEM INSTRUCTIONS]\n\nPlease follow the system instructions above for all responses.` }]
-      });
-      contents.push({
-        role: 'model',
-        parts: [{ text: 'I understand and will follow the system instructions provided.' }]
-      });
-    }
+    const contents = messages.map(msg => ({
+      role: msg.role === 'user' ? 'user' : 'model',
+      parts: [{ text: msg.content }],
+    }));
 
-    // Add actual messages
-    for (const msg of messages) {
-      contents.push({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.content }]
-      });
+    const body: Record<string, unknown> = {
+      contents,
+      generationConfig: {
+        maxOutputTokens: maxTokens,
+        temperature: 0.2, // Low temp for reliable JSON output
+      },
+    };
+
+    // Use Gemini's native systemInstruction field — far more reliable than injecting into messages
+    if (systemPrompt) {
+      body.systemInstruction = {
+        parts: [{ text: systemPrompt }],
+      };
     }
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents,
-          generationConfig: {
-            maxOutputTokens: maxTokens,
-            temperature: 0.7,
-          },
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
       }
     );
 
     if (!response.ok) {
       const err = await response.json();
-      return { text: '', error: err.error?.message || 'Gemini API error' };
+      const msg = err.error?.message || `Gemini API error (${response.status})`;
+      return { text: '', error: msg };
     }
 
     const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    return { text, error: text ? undefined : 'Empty response from Gemini' };
+
+    // Check for safety blocks or empty candidates
+    const candidate = data.candidates?.[0];
+    if (!candidate) {
+      return { text: '', error: 'Gemini returned no candidates — check API key or try again' };
+    }
+    if (candidate.finishReason === 'SAFETY') {
+      return { text: '', error: 'Gemini blocked response due to safety filters' };
+    }
+
+    const text = candidate.content?.parts?.[0]?.text || '';
+    if (!text) {
+      return { text: '', error: 'Empty response from Gemini' };
+    }
+    return { text };
   } catch (err: unknown) {
-    return { text: '', error: err instanceof Error ? err.message : 'Unknown error' };
+    return { text: '', error: err instanceof Error ? err.message : 'Unknown Gemini error' };
   }
 }
 
@@ -128,6 +131,37 @@ export async function callAI(
   } else {
     return callGeminiAPI(apiKey, messages, systemPrompt, maxTokens);
   }
+}
+
+// ── JSON Extraction Helper ──────────────────────────────────
+// Robustly extracts JSON from a response that may contain markdown fences,
+// explanatory text, or other noise. Tries multiple strategies in order.
+export function extractJSON(raw: string): string {
+  if (!raw) return '{}';
+
+  // 1. Strip markdown code fences
+  let cleaned = raw.replace(/^```json\s*/im, '').replace(/^```\s*/im, '').replace(/```\s*$/im, '').trim();
+
+  // 2. Try direct parse first
+  try { JSON.parse(cleaned); return cleaned; } catch { /* continue */ }
+
+  // 3. Find first { ... } block (handles leading/trailing prose)
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start !== -1 && end !== -1 && end > start) {
+    const candidate = cleaned.slice(start, end + 1);
+    try { JSON.parse(candidate); return candidate; } catch { /* continue */ }
+  }
+
+  // 4. Find first [ ... ] block (array responses)
+  const aStart = cleaned.indexOf('[');
+  const aEnd = cleaned.lastIndexOf(']');
+  if (aStart !== -1 && aEnd !== -1 && aEnd > aStart) {
+    const candidate = cleaned.slice(aStart, aEnd + 1);
+    try { JSON.parse(candidate); return candidate; } catch { /* continue */ }
+  }
+
+  return '{}';
 }
 
 // ── Validation Helpers ──────────────────────────────────────
