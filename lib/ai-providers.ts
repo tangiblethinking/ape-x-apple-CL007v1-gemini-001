@@ -34,7 +34,7 @@ async function callClaudeAPI(
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-5',
         max_tokens: maxTokens,
         system: systemPrompt,
         messages: messages,
@@ -58,13 +58,15 @@ async function callClaudeAPI(
 // Cache resolved model per API key (module-level, lives for server instance lifetime)
 const geminiModelCache = new Map<string, string>();
 
-// Preferred models in priority order. First one that ListModels says supports
-// generateContent wins. If ListModels fails, we fall back to GEMINI_FALLBACK_MODEL.
+// Preferred models in priority order. Flash variants first because they have
+// far higher free-tier quotas (Pro is heavily rate-limited or gated on free tier).
+// Pro is only reached on paid tiers or as last resort.
 const GEMINI_PREFERRED_MODELS = [
-  'gemini-2.5-pro',
   'gemini-2.5-flash',
-  'gemini-2.0-flash',
+  'gemini-2.5-flash-lite',
   'gemini-flash-latest',
+  'gemini-2.0-flash',
+  'gemini-2.5-pro',
   'gemini-pro-latest',
 ];
 const GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash';
@@ -79,10 +81,10 @@ interface ResolveResult {
   error?: string;
 }
 
-async function resolveGeminiModel(apiKey: string): Promise<ResolveResult> {
-  // 1. Cache hit
+async function resolveGeminiModel(apiKey: string, excludeModels: string[] = []): Promise<ResolveResult> {
+  // 1. Cache hit (skip if cached model is in exclusion list)
   const cached = geminiModelCache.get(apiKey);
-  if (cached) return { model: cached };
+  if (cached && !excludeModels.includes(cached)) return { model: cached };
 
   // 2. Call ListModels
   try {
@@ -95,8 +97,9 @@ async function resolveGeminiModel(apiKey: string): Promise<ResolveResult> {
       const errBody = await res.json().catch(() => ({}));
       const errMsg = errBody.error?.message || `ListModels HTTP ${res.status}`;
       // Use fallback but surface the error so caller can decide
-      geminiModelCache.set(apiKey, GEMINI_FALLBACK_MODEL);
-      return { model: GEMINI_FALLBACK_MODEL, error: `Model discovery failed: ${errMsg}. Using fallback ${GEMINI_FALLBACK_MODEL}.` };
+      const fallback = excludeModels.includes(GEMINI_FALLBACK_MODEL) ? 'gemini-2.5-flash-lite' : GEMINI_FALLBACK_MODEL;
+      geminiModelCache.set(apiKey, fallback);
+      return { model: fallback, error: `Model discovery failed: ${errMsg}. Using fallback ${fallback}.` };
     }
 
     const data = await res.json();
@@ -115,16 +118,19 @@ async function resolveGeminiModel(apiKey: string): Promise<ResolveResult> {
     // Strip "models/" prefix from names for comparison
     const capableNames = capable.map(m => m.name.replace(/^models\//, ''));
 
-    // Find first preferred model that is available
+    // Find first preferred model that is available AND not excluded
     for (const preferred of GEMINI_PREFERRED_MODELS) {
-      if (capableNames.includes(preferred)) {
+      if (capableNames.includes(preferred) && !excludeModels.includes(preferred)) {
         geminiModelCache.set(apiKey, preferred);
         return { model: preferred };
       }
     }
 
-    // No preferred match — take first available capable model
-    const firstAvailable = capableNames[0];
+    // No preferred match — take first available non-excluded capable model
+    const firstAvailable = capableNames.find(n => !excludeModels.includes(n));
+    if (!firstAvailable) {
+      return { model: '', error: `All available Gemini models have been tried and failed (excluded: ${excludeModels.join(', ')})` };
+    }
     geminiModelCache.set(apiKey, firstAvailable);
     return { model: firstAvailable };
   } catch (err: unknown) {
@@ -141,69 +147,103 @@ async function callGeminiAPI(
   systemPrompt?: string,
   maxTokens = 16000
 ): Promise<AIResponse> {
-  try {
-    // Resolve which model to use (cached after first call)
-    const { model, error: resolveError } = await resolveGeminiModel(apiKey);
+  // Try up to N times, excluding models that hit quota errors
+  const triedModels: string[] = [];
+  const maxAttempts = 3;
 
-    const contents = messages.map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.content }],
-    }));
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      // Resolve which model to use (cached after first call, retries skip exhausted models)
+      const { model, error: resolveError } = await resolveGeminiModel(apiKey, triedModels);
 
-    const body: Record<string, unknown> = {
-      contents,
-      generationConfig: {
-        maxOutputTokens: maxTokens,
-        temperature: 0.2, // Low temp for reliable JSON output
-      },
-    };
+      if (!model) {
+        return { text: '', error: resolveError || 'No Gemini model available' };
+      }
 
-    // Use Gemini's native systemInstruction field — far more reliable than injecting into messages
-    if (systemPrompt) {
-      body.systemInstruction = {
-        parts: [{ text: systemPrompt }],
+      const contents = messages.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }],
+      }));
+
+      const body: Record<string, unknown> = {
+        contents,
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+          temperature: 0.2, // Low temp for reliable JSON output
+        },
       };
-    }
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      // Use Gemini's native systemInstruction field — far more reliable than injecting into messages
+      if (systemPrompt) {
+        body.systemInstruction = {
+          parts: [{ text: systemPrompt }],
+        };
       }
-    );
 
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      const apiMsg = err.error?.message || `Gemini API error (${response.status})`;
-      // If the chosen model 404s, invalidate cache so next call re-resolves
-      if (response.status === 404) {
-        geminiModelCache.delete(apiKey);
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        const apiMsg = err.error?.message || `Gemini API error (${response.status})`;
+        const status = err.error?.status || '';
+
+        // Detect quota / rate limit errors — retry with next model
+        const isQuotaError = response.status === 429
+          || status === 'RESOURCE_EXHAUSTED'
+          || /quota|rate limit|exceeded/i.test(apiMsg);
+
+        if (isQuotaError && attempt < maxAttempts - 1) {
+          // Mark this model as exhausted, invalidate cache, try next
+          triedModels.push(model);
+          geminiModelCache.delete(apiKey);
+          continue;
+        }
+
+        // Model not found — also retry with next model
+        if (response.status === 404 && attempt < maxAttempts - 1) {
+          triedModels.push(model);
+          geminiModelCache.delete(apiKey);
+          continue;
+        }
+
+        // Out of retries or non-retryable error
+        const triedNote = triedModels.length > 0 ? ` (tried: ${triedModels.join(', ')})` : '';
+        const combined = resolveError
+          ? `${apiMsg} | ${resolveError}${triedNote}`
+          : `${apiMsg} (model: ${model})${triedNote}`;
+        return { text: '', error: combined };
       }
-      const combined = resolveError ? `${apiMsg} | ${resolveError}` : `${apiMsg} (model: ${model})`;
-      return { text: '', error: combined };
-    }
 
-    const data = await response.json();
+      const data = await response.json();
 
-    // Check for safety blocks or empty candidates
-    const candidate = data.candidates?.[0];
-    if (!candidate) {
-      return { text: '', error: `Gemini returned no candidates (model: ${model}) — check API key or try again` };
-    }
-    if (candidate.finishReason === 'SAFETY') {
-      return { text: '', error: 'Gemini blocked response due to safety filters' };
-    }
+      // Check for safety blocks or empty candidates
+      const candidate = data.candidates?.[0];
+      if (!candidate) {
+        return { text: '', error: `Gemini returned no candidates (model: ${model}) — check API key or try again` };
+      }
+      if (candidate.finishReason === 'SAFETY') {
+        return { text: '', error: 'Gemini blocked response due to safety filters' };
+      }
 
-    const text = candidate.content?.parts?.[0]?.text || '';
-    if (!text) {
-      return { text: '', error: `Empty response from Gemini (model: ${model})` };
+      const text = candidate.content?.parts?.[0]?.text || '';
+      if (!text) {
+        return { text: '', error: `Empty response from Gemini (model: ${model})` };
+      }
+      return { text };
+    } catch (err: unknown) {
+      // Network/parse error — don't retry, just return
+      return { text: '', error: err instanceof Error ? err.message : 'Unknown Gemini error' };
     }
-    return { text };
-  } catch (err: unknown) {
-    return { text: '', error: err instanceof Error ? err.message : 'Unknown Gemini error' };
   }
+
+  return { text: '', error: `All Gemini models exhausted after ${maxAttempts} attempts (tried: ${triedModels.join(', ')})` };
 }
 
 // ── Unified API Call ────────────────────────────────────────
