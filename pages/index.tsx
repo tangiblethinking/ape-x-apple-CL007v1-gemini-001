@@ -114,7 +114,7 @@ async function parseFile(file: File): Promise<string> {
 }
 
 // ── Loading Overlay ────────────────────────────────────────────────────────
-function LoadingOverlay({onCancel,onDismiss,minutesEta=1,dismissOnly=false,customMessage,phaseMessage}:{
+function LoadingOverlay({onCancel,onDismiss,minutesEta=6,dismissOnly=false,customMessage,phaseMessage}:{
   onCancel?:()=>void;onDismiss?:()=>void;minutesEta?:number;dismissOnly?:boolean;customMessage?:string;phaseMessage?:string;
 }) {
   const [confirm,setConfirm]=useState(false);
@@ -127,9 +127,9 @@ function LoadingOverlay({onCancel,onDismiss,minutesEta=1,dismissOnly=false,custo
   },[dismissOnly]);
   const mainMsg=customMessage||phaseMessage||(dismissOnly?'Generation in Progress...':'Results in Progress.');
   return (
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',backdropFilter:'blur(24px)',WebkitBackdropFilter:'blur(24px)',zIndex:1000,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:32}}>
+    <div style={{position:'fixed',inset:0,background:'#000000',zIndex:1000,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:32}}>
       {confirm&&!dismissOnly?(
-        <div style={{background:'rgba(28,28,30,0.92)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',borderRadius:20,padding:'32px 28px',textAlign:'center',maxWidth:340,border:'0.5px solid rgba(255,255,255,0.12)',boxShadow:'0 20px 60px rgba(0,0,0,0.5)'}}>
+        <div style={{background:'rgba(28,28,30,0.98)',borderRadius:20,padding:'32px 28px',textAlign:'center',maxWidth:340,border:'0.5px solid rgba(255,255,255,0.12)',boxShadow:'0 20px 60px rgba(0,0,0,0.8)'}}>
           <div style={{width:52,height:52,borderRadius:'50%',background:'rgba(255,59,48,0.15)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
             <AlertTriangle size={24} color="#FF3B30"/>
           </div>
@@ -143,10 +143,14 @@ function LoadingOverlay({onCancel,onDismiss,minutesEta=1,dismissOnly=false,custo
       ):(
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <div style={{width:172,height:172,borderRadius:24,overflow:'hidden',flexShrink:0,boxShadow:'0 8px 32px rgba(0,0,0,0.4)'}}><img src="https://cdn.dribbble.com/userupload/19917114/file/original-880f3ab68d9bcfe041db6649d5f8003b.gif" alt="Loading" style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/></div>
+          <div style={{width:172,height:172,borderRadius:24,overflow:'hidden',flexShrink:0,boxShadow:'0 8px 32px rgba(0,0,0,0.8)'}}><img src="https://cdn.dribbble.com/userupload/19917114/file/original-880f3ab68d9bcfe041db6649d5f8003b.gif" alt="Loading" style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/></div>
           <div style={{textAlign:'center'}}>
             <div style={{fontSize:20,fontWeight:700,letterSpacing:'-0.02em',color:'rgba(255,255,255,0.95)',marginBottom:6}}>{mainMsg}</div>
-            {!dismissOnly&&<div style={{fontSize:13,color:'rgba(255,255,255,0.45)',marginTop:4}}>Ready at about {eta}</div>}
+            {!dismissOnly&&(
+              <div style={{fontSize:13,color:'rgba(255,255,255,0.45)',marginTop:4}}>
+                Expected results by {eta} — but hopefully sooner.
+              </div>
+            )}
           </div>
           {dismissOnly
             ?<button onClick={onDismiss} style={{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,0.4)',fontSize:13,padding:'8px 16px'}}>Dismiss</button>
@@ -1065,7 +1069,7 @@ function HowToDrawer({onClose}:{onClose:()=>void;}) {
             {num:'3',title:'Running a Job Search',color:'#000000',items:[
               ['Search Tab','Click "Run Job Search". Instructions are pre-loaded from your saved profile. Edit them only in Settings.'],
               ['Special Instructions','One-off override for this search session only — not saved permanently.'],
-              ['Loading Screen','Shows estimated ready time (~30–60 sec). Two-pass verified: Pass 1 searches all job boards, Pass 2 verifies each listing on the company\'s own site. Press Esc to cancel.'],
+              ['Loading Screen','Shows estimated ready time (~5–6 min). Two-pass verified: Pass 1 searches all job boards, Pass 2 verifies each listing on the company\'s own site. Press Esc to cancel.'],
               ['Results','Board tab opens automatically with verified, triple-layer audited roles only.'],
             ]},
             {num:'4',title:'The Job Board',color:'#007AFF',items:[
@@ -1994,7 +1998,7 @@ export default function Home() {
 
       {searching&&<LoadingOverlay
         onCancel={()=>{abortRef.current=true;setSearching(false);}}
-        minutesEta={1}
+        minutesEta={6}
         phaseMessage={searchPhase===1?'Sending the apes out to search...':'Verifying listings across company pages...'}
       />}
       {showHowTo&&<HowToDrawer onClose={()=>setShowHowTo(false)}/>}
@@ -2122,8 +2126,9 @@ export default function Home() {
       <header className="header-inner" style={{background:'rgba(242,242,247,0.85)',backdropFilter:'blur(20px) saturate(180%)',WebkitBackdropFilter:'blur(20px) saturate(180%)',borderBottom:'0.5px solid rgba(60,60,67,0.29)',padding:'0 20px',height:52,display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:200,flexShrink:0}}>
         <div style={{display:'flex',alignItems:'center',gap:2}}>
           <div style={{marginRight:14,display:'flex',alignItems:'center',gap:8}}>
-            <div style={{width:28,height:28,borderRadius:10,background:'linear-gradient(135deg,#007AFF,#5856D6)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(0,122,255,0.3)'}}>
-              <span style={{fontSize:14}}>🦍</span>
+            <div style={{width:28,height:28,borderRadius:10,background:'linear-gradient(135deg,#007AFF,#5856D6)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(0,122,255,0.3)',overflow:'hidden'}}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/ape-x-icon-logo.png" alt="Ape X" style={{width:'100%',height:'100%',objectFit:'contain'}}/>
             </div>
             <span style={{fontSize:15,fontWeight:700,letterSpacing:'-0.02em',color:'#000'}}>Ape X</span>
           </div>
@@ -2205,7 +2210,7 @@ export default function Home() {
                 <Sparkles size={13}/>Special Instructions
               </button>
             </div>
-            <p style={{fontSize:12,color:'rgba(60,60,67,0.45)',marginTop:10,letterSpacing:'-0.01em'}}>~30–60 sec · two-pass verified · edit instructions in Settings</p>
+            <p style={{fontSize:12,color:'rgba(60,60,67,0.45)',marginTop:10,letterSpacing:'-0.01em'}}>~5–6 min · two-pass verified · edit instructions in Settings</p>
             <button className="mobile-only" onClick={()=>setShowMobileFAB(true)} style={{position:'fixed',bottom:80,right:24,zIndex:100,width:52,height:52,borderRadius:'50%',background:'#007AFF',color:'#fff',border:'none',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 20px rgba(0,122,255,0.4)',cursor:'pointer'}}>
               <FileText size={20}/>
             </button>
@@ -2496,10 +2501,7 @@ export default function Home() {
       {/* STICKY FOOTER */}
       <footer style={{background:'rgba(242,242,247,0.85)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',borderTop:'0.5px solid rgba(60,60,67,0.18)',color:'rgba(60,60,67,0.5)',textAlign:'center',padding:'10px 20px',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center',gap:6,position:'sticky',bottom:0,zIndex:100,flexShrink:0,flexWrap:'wrap'}}>
         <Copyright size={11}/>
-        <span>{new Date().getFullYear()} Ape X LLC</span>
-        <span>·</span>
-        {profile.portfolioUrl&&<><a href={`https://${profile.portfolioUrl}`} target="_blank" rel="noreferrer" style={{color:'#007AFF',textDecoration:'none'}}>{profile.portfolioUrl}</a><span>·</span></>}
-        {profile.linkedinUrl&&<a href={`https://${profile.linkedinUrl}`} target="_blank" rel="noreferrer" style={{color:'#007AFF',textDecoration:'none'}}>LinkedIn</a>}
+        <span>Ape X Job Hunt</span>
         <span>·</span>
         <button onClick={()=>setShowTerms(true)} style={{background:'none',border:'none',cursor:'pointer',color:'rgba(60,60,67,0.6)',fontSize:11,padding:0,textDecoration:'underline'}}>Terms &amp; Conditions</button>
       </footer>
