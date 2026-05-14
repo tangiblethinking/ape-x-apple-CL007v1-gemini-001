@@ -5,6 +5,9 @@
 
 import type { AIProvider } from './storage';
 
+// Re-export AIProvider type for convenience
+export type { AIProvider };
+
 export interface AIMessage {
   role: 'user' | 'assistant';
   content: string;

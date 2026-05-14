@@ -1075,8 +1075,8 @@ function HowToDrawer({onClose}:{onClose:()=>void;}) {
 }
 
 // ── Generate Modal ─────────────────────────────────────────────────────────
-function GenerateModal({job,type,onClose,instructions,apiKey}:{
-  job:SavedJob;type:GenerateType;onClose:()=>void;instructions:string;apiKey:string;
+function GenerateModal({job,type,onClose,instructions,apiKey,aiProvider}:{
+  job:SavedJob;type:GenerateType;onClose:()=>void;instructions:string;apiKey:string;aiProvider:AIProvider;
 }) {
   const [jd,setJd]=useState(job.roleSummary+'\n\nRequirements:\n'+(job.requirements?.join('\n')||''));
   const [loading,setLoading]=useState(false);
@@ -1958,7 +1958,7 @@ export default function Home() {
       {showSuccess&&<SuccessModal onSearch={()=>{setShowSuccess(false);runSearch();}} onClose={()=>setShowSuccess(false)}/>}
       {showWelcome&&<WelcomeModal onBegin={()=>{setWizardSeen();setShowWelcome(false);setShowWizard(true);}} onSkip={()=>{setWizardSeen();setShowWelcome(false);}}/>}
       {showMobileFAB&&<MobileFAB instructions={jobSearchInstr} onClose={()=>setShowMobileFAB(false)}/>}
-      {generateModal&&<GenerateModal job={generateModal.job} type={generateModal.type} instructions={generateModal.type==='resume'?resumeInstr:coverInstr} apiKey={anthropicKey} onClose={()=>setGenerateModal(null)}/>}
+      {generateModal&&<GenerateModal job={generateModal.job} type={generateModal.type} instructions={generateModal.type==='resume'?resumeInstr:coverInstr} apiKey={anthropicKey} aiProvider={aiProvider} onClose={()=>setGenerateModal(null)}/>}
       {addStatusModal&&<AddStatusModal jobId={addStatusModal} onClose={()=>setAddStatusModal(null)}/>}
       {showClearBoard&&<ConfirmModal title="Delete All Jobs?" body="This will permanently remove all jobs from the board. This cannot be undone." confirmLabel="Delete" onConfirm={()=>{clearSavedJobs();setJobs([]);setExcludedJobs([]);setShowClearBoard(false);}} onClose={()=>setShowClearBoard(false)}/>}
       {showSaveImport&&<SaveImportModal onClose={()=>setShowSaveImport(false)} onImportComplete={()=>{window.location.reload();}}/>}
