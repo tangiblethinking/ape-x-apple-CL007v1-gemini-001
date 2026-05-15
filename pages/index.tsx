@@ -293,6 +293,17 @@ function SetupWizard({initialProfile,initialAnthropicKey,initialSerperKey,initia
   const [wizAnthropicKey,setWizAnthropicKey]=useState(initialAnthropicKey);
   const [wizSerperKey,setWizSerperKey]=useState(initialSerperKey);
   const [wizProvider,setWizProvider]=useState<AIProvider>(initialProvider);
+
+  // Reload keys from localStorage when wizard opens (handles re-open without app reset)
+  useEffect(()=>{
+    const storedKey=getLocalApiKey();
+    const storedSerper=getLocalSerperKey();
+    const storedProvider=getAIProvider();
+    if(storedKey&&!wizAnthropicKey) setWizAnthropicKey(storedKey);
+    if(storedSerper&&!wizSerperKey) setWizSerperKey(storedSerper);
+    if(storedProvider) setWizProvider(storedProvider);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
   const [uploading,setUploading]=useState(false);
   const [uploadMsg,setUploadMsg]=useState('');
   const [extracting,setExtracting]=useState(false);
@@ -347,7 +358,11 @@ function SetupWizard({initialProfile,initialAnthropicKey,initialSerperKey,initia
   // Extract on Next click at resume step — runs extraction then advances
   const extractAndAdvance=async()=>{
     const text=resumeTextRef.current||getUploadedResume();
-    if(!text){goToStep(step+1);return;}
+    if(!text){
+      setUploadMsg('⚠ No text extracted from resume. Your PDF may be image-based (scanned). Try uploading an HTML or DOCX version instead.');
+      goToStep(step+1);
+      return;
+    }
     setExtracting(true);
     setUploadMsg('');
     try{

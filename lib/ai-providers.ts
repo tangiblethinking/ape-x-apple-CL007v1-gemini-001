@@ -173,6 +173,12 @@ async function callGeminiAPI(
         },
       };
 
+      // Auto-detect JSON extraction tasks from system prompt
+      // When prompt asks for JSON output, force Gemini to return valid JSON
+      if (systemPrompt && /JSON|json object/i.test(systemPrompt)) {
+        (body.generationConfig as Record<string, unknown>).response_mime_type = 'application/json';
+      }
+
       // Use Gemini's native systemInstruction field — far more reliable than injecting into messages
       if (systemPrompt) {
         body.systemInstruction = {
