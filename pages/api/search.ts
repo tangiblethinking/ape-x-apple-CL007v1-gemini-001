@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { extractStateCodes, validateLocationInput } from '../../lib/location-validator';
 
 // ── JSON repair: close unclosed arrays/objects from truncated Claude output ──
 function repairJson(raw: string): string {
@@ -41,40 +42,34 @@ function extractTitles(instructions: string): string[] {
 function extractLocations(instructions: string): string[] {
   const match = instructions.match(/Location:\s*(.+)/);
   if (!match) return [];
-  const locStr = match[1];
-  // Pull state/city abbreviations
-  const states = locStr.match(/\b([A-Z]{2})\b/g) || [];
-  return states;
+  return extractStateCodes(match[1]);
 }
 
 // Build Serper queries from user's actual titles
 function buildQueries(titles: string[], locations: string[]): string[] {
-  if (!titles.length) return [
-    '"Director" remote 2026',
-    '"Manager" remote 2026',
-    '"Lead" remote 2026',
-  ];
+  if (!titles.length) return [];
 
+  const currentYear = new Date().getFullYear();
   const queries: string[] = [];
   const locationStr = locations.length ? locations.slice(0, 3).join(' OR ') : 'Remote';
   const isRemote = locationStr.toLowerCase().includes('remote');
 
-  // One query per title (up to 6)
+  // One query per title (up to 4)
   for (const title of titles.slice(0, 4)) {
-    queries.push(`"${title}" remote 2026`);
+    queries.push(`"${title}" remote ${currentYear}`);
   }
 
   // Location-based queries for non-remote
   if (!isRemote && locations.length) {
     for (const title of titles.slice(0, 2)) {
-      queries.push(`"${title}" ${locationStr} 2026`);
+      queries.push(`"${title}" ${locationStr} ${currentYear}`);
     }
   }
 
   // ATS-specific queries for top 2 titles
   for (const title of titles.slice(0, 2)) {
-    queries.push(`site:greenhouse.io "${title}" 2026`);
-    queries.push(`site:lever.co "${title}" 2026`);
+    queries.push(`site:greenhouse.io "${title}" ${currentYear}`);
+    queries.push(`site:lever.co "${title}" ${currentYear}`);
   }
 
   return queries.slice(0, 8); // cap at 8 queries
@@ -94,6 +89,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // Build queries from user's actual target titles
     const userTitles = extractTitles(instructions);
+    const locationRaw = (instructions.match(/Location:\s*(.+)/)?.[1] || '').trim();
+
+    // Backend location validation
+    if (locationRaw && locationRaw.toLowerCase() !== 'remote') {
+      const locValidation = validateLocationInput(locationRaw);
+      if (!locValidation.valid) {
+        return res.status(400).json({ error: locValidation.error });
+      }
+    }
+
     const userLocations = extractLocations(instructions);
     const searchQueries = buildQueries(userTitles, userLocations);
 

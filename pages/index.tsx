@@ -35,6 +35,7 @@ import {
   validateAPIKey, getAPIKeyPlaceholder, getAPIKeyNote,
   getProviderName, getProviderSetupURL, getProviderSetupSteps,
 } from '../lib/ai-providers';
+import { validateAllLocations, validateLocationInput } from '../lib/location-validator';
 
 type Tab = 'search' | 'board' | 'applied' | 'settings';
 type GenerateType = 'resume' | 'coverLetter';
@@ -301,6 +302,7 @@ function SetupWizard({initialProfile,initialAnthropicKey,initialSerperKey,initia
   const [linkStep,setLinkStep]=useState<'title'|'url'>('title');
   const [newTitle,setNewTitle]=useState('');
   const [newLocation,setNewLocation]=useState('');
+  const [locationError,setLocationError]=useState('');
   const [newSector,setNewSector]=useState('');
   const fileRef=useRef<HTMLInputElement>(null);
   const coverFileRef=useRef<HTMLInputElement>(null);
@@ -421,8 +423,14 @@ function SetupWizard({initialProfile,initialAnthropicKey,initialSerperKey,initia
   };
   const removeTargetTitle=(t:string)=>upd('targetTitles',profile.targetTitles.filter(x=>x!==t));
   const addLocation=()=>{
-    if(newLocation.trim()&&!profile.locations.includes(newLocation.trim())){
-      upd('locations',[...profile.locations,newLocation.trim()]);setNewLocation('');
+    const val=newLocation.trim();
+    if(!val) return;
+    const check=validateLocationInput(val);
+    if(!check.valid){setLocationError(check.error||'Invalid location.');return;}
+    if(!profile.locations.includes(val)){
+      upd('locations',[...profile.locations,val]);setNewLocation('');setLocationError('');
+    } else {
+      setNewLocation('');setLocationError('');
     }
   };
   const removeLocation=(l:string)=>upd('locations',profile.locations.filter(x=>x!==l));
@@ -860,9 +868,10 @@ function SetupWizard({initialProfile,initialAnthropicKey,initialSerperKey,initia
                 ))}
               </div>
               <div style={{display:'flex',gap:8}}>
-                <input type="text" value={newLocation} onChange={e=>setNewLocation(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addLocation()} style={inp({flex:'1',marginBottom:0})} placeholder="e.g. AZ, Phoenix, TX"/>
+                <input type="text" value={newLocation} onChange={e=>{setNewLocation(e.target.value);setLocationError('');}} onKeyDown={e=>e.key==='Enter'&&addLocation()} style={inp({flex:'1',marginBottom:0})} placeholder="e.g. AZ, Phoenix AZ, USA"/>
                 <button onClick={addLocation} disabled={!newLocation.trim()} style={{padding:'10px 14px',background:'#000000',color:'#fff',border:'none',borderRadius:10,cursor:'pointer',fontWeight:600,fontSize:13,display:'flex',alignItems:'center',gap:5}}><Plus size={14}/>Add</button>
               </div>
+              {locationError&&<div style={{fontSize:12,color:'#FF3B30',marginTop:6,display:'flex',alignItems:'center',gap:5}}><AlertTriangle size={12}/>{locationError}</div>}
             </div>
           )}
         </div>
@@ -1750,8 +1759,9 @@ export default function Home() {
       const data2=await safeJson(res2);
       if(!res2.ok){setSearchError((data2.error as string)||'Search failed in Pass 2.');setSearching(false);return;}
 
-      const live=((data2.jobs as (SavedJob|ExcludedJob)[])||[]).filter((j:SavedJob|ExcludedJob)=>!j.excluded) as SavedJob[];
-      const excl=((data2.jobs as (SavedJob|ExcludedJob)[])||[]).filter((j:SavedJob|ExcludedJob)=>j.excluded) as ExcludedJob[];
+      const allJobs=Array.isArray(data2.jobs)?data2.jobs as (SavedJob|ExcludedJob)[]:[];
+      const live=allJobs.filter((j:SavedJob|ExcludedJob)=>!j.excluded) as SavedJob[];
+      const excl=allJobs.filter((j:SavedJob|ExcludedJob)=>j.excluded) as ExcludedJob[];
       setJobs(live);setExcludedJobs(excl);setSavedJobs(live);
       setLastSearchQuery(jobSearchInstr);
 
@@ -1779,6 +1789,14 @@ export default function Home() {
   };
 
   const runSearch=async()=>{
+    // Frontend location validation
+    if(profile.locations && profile.locations.length>0){
+      const locValidation=validateAllLocations(profile.locations);
+      if(!locValidation.valid){
+        setSearchError(locValidation.error||'Invalid location format.');
+        return;
+      }
+    }
     if(isHistoryFull()){
       setShowHistoryFull(true);
       setPendingSearch(true);
