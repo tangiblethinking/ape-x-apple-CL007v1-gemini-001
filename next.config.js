@@ -4,7 +4,6 @@ const fs = require('fs');
 
 const nextConfig = {
   reactStrictMode: true,
-  basePath: "/ape",
   webpack: (config, { isServer }) => {
     if (!isServer) {
       // Copy pdf.js worker to public on every build so it's always up to date
