@@ -91,17 +91,59 @@ function fmtSalary(n: number): string {
   if (n === 0) return 'Volunteer';
   return `$${(n/1000).toFixed(0)}K`;
 }
-async function parseFile(file: File): Promise<string> {
-  // Browser detection for debugging
-  const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
-  const isFirefox = /Firefox/.test(navigator.userAgent);
-  const isChrome = /Chrome/.test(navigator.userAgent);
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  const isAndroid = /Android/.test(navigator.userAgent);
-  const browserInfo = `${isIOS ? 'iOS' : isAndroid ? 'Android' : 'Desktop'} ${isSafari ? 'Safari' : isFirefox ? 'Firefox' : isChrome ? 'Chrome' : 'Unknown'}`;
+// Browser detection utility
+function getBrowserInfo() {
+  const ua = navigator.userAgent;
+  const isSafari = /Safari/.test(ua) && !/Chrome|Chromium|OPR|Brave|Edge/.test(ua);
+  const isFirefox = /Firefox/.test(ua);
+  const isChrome = /Chrome|Chromium/.test(ua) && !/Brave|Edge|OPR/.test(ua);
+  const isBrave = /Brave/.test(ua);
+  const isEdge = /Edg/.test(ua);
+  const isOpera = /OPR/.test(ua);
+  const isIOS = /iPad|iPhone|iPod/.test(ua);
+  const isAndroid = /Android/.test(ua);
+  const isDesktop = !isIOS && !isAndroid;
   
+  const browserType = isBrave ? 'Brave' : isEdge ? 'Edge' : isOpera ? 'Opera' : isFirefox ? 'Firefox' : isChrome ? 'Chrome' : isSafari ? 'Safari' : 'Unknown';
+  const platform = isIOS ? 'iOS' : isAndroid ? 'Android' : 'Desktop';
+  const isPrivacyBrowser = isBrave; // Add more privacy browsers as needed
+  
+  return {
+    browserType,
+    platform,
+    isPrivacyBrowser,
+    isIOS,
+    isAndroid,
+    isDesktop,
+    userAgent: ua,
+    displayName: `${platform} ${browserType}`,
+  };
+}
+
+// Test if browser can upload files
+function testUploadCapability(): { canUpload: boolean; reason?: string } {
+  try {
+    const test = new FormData();
+    test.append('test', new Blob(['test']), 'test.txt');
+    return { canUpload: true };
+  } catch (err) {
+    return { 
+      canUpload: false, 
+      reason: `FormData not supported: ${err instanceof Error ? err.message : 'Unknown'}` 
+    };
+  }
+}
+
+async function parseFile(file: File): Promise<string> {
+  const browser = getBrowserInfo();
+  const uploadTest = testUploadCapability();
+  
+  // Debug logging
   console.log('=== parseFile Debug ===');
-  console.log('Browser:', browserInfo);
+  console.log('Browser:', browser.displayName);
+  console.log('User Agent:', browser.userAgent);
+  console.log('Is Privacy Browser:', browser.isPrivacyBrowser);
+  console.log('Upload Capable:', uploadTest.canUpload);
   console.log('File name:', file.name);
   console.log('File type:', file.type);
   console.log('File size:', file.size);
@@ -123,6 +165,16 @@ async function parseFile(file: File): Promise<string> {
 
   // For PDF and DOCX, use backend API (works on all devices)
   if (ext === 'docx' || ext === 'pdf') {
+    // Warn user if using privacy browser
+    if (browser.isPrivacyBrowser) {
+      console.warn(`⚠️ You're using ${browser.browserType} which may block file uploads due to privacy shields.`);
+      console.warn('If upload fails, try disabling shields for this site or using a standard browser.');
+    }
+    
+    if (!uploadTest.canUpload) {
+      throw new Error(`Upload not supported on this browser: ${uploadTest.reason}`);
+    }
+
     try {
       console.log('Creating FormData...');
       const formData = new FormData();
@@ -157,13 +209,19 @@ async function parseFile(file: File): Promise<string> {
         throw new Error(data.error || 'No text extracted from file');
       }
 
-      console.log('✓ parseFile successful');
+      console.log('✓ parseFile successful on', browser.displayName);
       return data.text;
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error('✗ parseFile failed:', errMsg);
-      console.error('Browser:', browserInfo);
+      console.error('Browser:', browser.displayName);
       console.error('File:', file.name);
+      
+      // Provide helpful error message for privacy browsers
+      if (browser.isPrivacyBrowser && errMsg.includes('Server error')) {
+        throw new Error(`${errMsg}. If using ${browser.browserType} shields, try disabling them for this site.`);
+      }
+      
       throw new Error(errMsg);
     }
   }
