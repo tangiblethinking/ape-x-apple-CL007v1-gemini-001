@@ -50,8 +50,13 @@ async function parsePdf(filePath: string): Promise<string> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
-    // Required in Node.js/serverless: disable worker thread
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const nodePath = require('path');
+    const workerPath = nodePath.join(
+      nodePath.dirname(require.resolve('pdfjs-dist/legacy/build/pdf.js')),
+      'pdf.worker.js'
+    );
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerPath;
     const fileBuffer = fs.readFileSync(filePath);
     if (!fileBuffer || fileBuffer.length === 0) throw new Error('PDF file is empty');
     const data = new Uint8Array(fileBuffer);
