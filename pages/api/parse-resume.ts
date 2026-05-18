@@ -93,7 +93,7 @@ async function parsePdf(filePath: string): Promise<string> {
     }
 
     console.log('[parse-resume] Parsing PDF buffer, size:', fileBuffer.length);
-    const parser = new PDFParse({ buffer: fileBuffer });
+    const parser = new PDFParse({ data: fileBuffer });
     const result = await parser.getText();
     console.log('[parse-resume] PDF parsed, text length:', result?.text?.length || 0);
     
@@ -101,6 +101,7 @@ async function parsePdf(filePath: string): Promise<string> {
       throw new Error('No text in PDF - may be image-based or encrypted');
     }
 
+    await parser.destroy();
     return result.text.trim();
   } catch (err) {
     console.error('[parse-resume] PDF parsing error:', err);
