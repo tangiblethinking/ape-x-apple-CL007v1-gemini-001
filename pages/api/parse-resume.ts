@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
 interface ParseResponse {
   text?: string;
@@ -16,13 +17,48 @@ export const config = {
 };
 
 /**
+ * Get reliable temp directory path for Vercel/Node.js
+ */
+function getTempDir(): string {
+  // Try multiple approaches to find a working temp directory
+  const candidates = [
+    path.join(process.cwd(), 'tmp'), // Local tmp in project
+    path.join(process.cwd(), '.tmp'), // Hidden tmp
+    '/tmp', // Unix standard temp
+    os.tmpdir(), // Node.js tmpdir
+    path.join(os.tmpdir(), 'ape-x-parse'), // Custom in os temp
+  ];
+
+  for (const dir of candidates) {
+    try {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      // Test if we can write
+      const testFile = path.join(dir, `.test-${Date.now()}`);
+      fs.writeFileSync(testFile, 'test');
+      fs.unlinkSync(testFile);
+      return dir; // Found a working directory
+    } catch (err) {
+      // This directory doesn't work, try next
+      continue;
+    }
+  }
+
+  // If all fail, throw detailed error
+  throw new Error(
+    `No writable temp directory found. Tried: ${candidates.join(', ')}. ` +
+    `Last error: Unable to create or write to any temporary directory.`
+  );
+}
+
+/**
  * Parse DOCX using mammoth
  */
 async function parseDocx(filePath: string): Promise<string> {
   try {
-    // Use require for Node.js compatibility
     const mammoth = require('mammoth');
-    
+
     if (!mammoth.extractRawText) {
       throw new Error('mammoth.extractRawText not available');
     }
@@ -46,21 +82,18 @@ async function parseDocx(filePath: string): Promise<string> {
  */
 async function parsePdf(filePath: string): Promise<string> {
   try {
-    // Use require for Node.js compatibility
     const PDFParse = require('pdf-parse');
 
     if (!PDFParse) {
       throw new Error('pdf-parse module not available');
     }
 
-    // Read file buffer
     const fileBuffer = fs.readFileSync(filePath);
 
     if (!fileBuffer || fileBuffer.length === 0) {
       throw new Error('PDF file is empty or unreadable');
     }
 
-    // Parse PDF
     const data = await PDFParse(fileBuffer);
 
     if (!data || !data.text) {
@@ -95,7 +128,6 @@ async function parseHtml(filePath: string): Promise<string> {
       throw new Error('HTML file is empty');
     }
 
-    // Strip HTML tags and normalize whitespace
     const text = content
       .replace(/<[^>]*>/g, ' ')
       .replace(/\s+/g, ' ')
@@ -124,23 +156,21 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const uploadDir = path.join(process.cwd(), 'tmp');
+  let uploadDir = '';
   let filePath = '';
 
   try {
-    // Ensure tmp directory exists
-    if (!fs.existsSync(uploadDir)) {
-      try {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      } catch (mkdirErr) {
-        return res.status(500).json({
-          error: 'Server configuration error',
-          details: `Failed to create upload directory: ${mkdirErr}`,
-        });
-      }
+    // Get working temp directory
+    try {
+      uploadDir = getTempDir();
+    } catch (tempErr) {
+      return res.status(500).json({
+        error: 'Server configuration error',
+        details: tempErr instanceof Error ? tempErr.message : String(tempErr),
+      });
     }
 
-    // Initialize form parser
+    // Initialize form parser with discovered temp directory
     const form = new IncomingForm({
       uploadDir,
       keepExtensions: true,
@@ -184,7 +214,7 @@ export default async function handler(
     if (!fs.existsSync(filePath)) {
       return res.status(500).json({
         error: 'Server error',
-        details: 'Uploaded file not found in temp directory',
+        details: `Uploaded file not found at: ${filePath}`,
       });
     }
 
@@ -236,7 +266,7 @@ export default async function handler(
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error('parse-resume API error:', msg);
+    console.error('parse-resume API error:', msg, 'uploadDir:', uploadDir);
     return res.status(500).json({
       error: 'Server error',
       details: msg,
@@ -248,10 +278,7 @@ export default async function handler(
         fs.unlinkSync(filePath);
       } catch (unlinkErr) {
         console.error('Failed to cleanup temp file:', unlinkErr);
-        // Don't fail the request due to cleanup error
       }
     }
   }
 }
-
-
