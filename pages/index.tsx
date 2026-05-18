@@ -107,17 +107,32 @@ async function parseFile(file: File): Promise<string> {
   }
   if (ext==='pdf') {
     try {
+      // pdfjs-dist exports can vary by bundler; try multiple approaches
       const pdfjsLib = await import('pdfjs-dist');
-      if (!pdfjsLib || !pdfjsLib.getDocument) {
-        throw new Error('pdfjs-dist module not properly loaded');
-      }
-      const { getDocument, GlobalWorkerOptions } = pdfjsLib;
-      if (!getDocument) throw new Error('getDocument not found in pdfjs-dist');
-      if (!GlobalWorkerOptions) throw new Error('GlobalWorkerOptions not found in pdfjs-dist');
+      let getDocumentFn = pdfjsLib.getDocument;
+      let GlobalWorkerOptionsFn = pdfjsLib.GlobalWorkerOptions;
       
-      GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+      // Fallback: check if they're under .default (some bundlers)
+      if (!getDocumentFn && pdfjsLib.default) {
+        getDocumentFn = pdfjsLib.default.getDocument;
+        GlobalWorkerOptionsFn = pdfjsLib.default.GlobalWorkerOptions;
+      }
+      
+      // Last resort: try the module itself as pdfjs
+      if (!getDocumentFn) {
+        getDocumentFn = pdfjsLib.getDocument || (pdfjsLib as any).getDocument;
+      }
+      
+      if (!getDocumentFn || typeof getDocumentFn !== 'function') {
+        throw new Error(`getDocument not found or not a function. Available: ${Object.keys(pdfjsLib).join(', ').substring(0, 100)}`);
+      }
+      
+      if (GlobalWorkerOptionsFn) {
+        GlobalWorkerOptionsFn.workerSrc = '/pdf.worker.min.mjs';
+      }
+      
       const buf = await file.arrayBuffer();
-      const pdf = await getDocument({data:buf}).promise;
+      const pdf = await getDocumentFn({data:buf}).promise;
       let text = '';
       for (let i=1;i<=pdf.numPages;i++) {
         const page = await pdf.getPage(i);
