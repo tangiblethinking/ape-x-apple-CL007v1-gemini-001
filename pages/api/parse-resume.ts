@@ -17,16 +17,14 @@ export const config = {
 };
 
 /**
- * Get reliable temp directory path for Vercel/Node.js
+ * Get reliable temp directory for Vercel
  */
 function getTempDir(): string {
-  // Try multiple approaches to find a working temp directory
   const candidates = [
-    path.join(process.cwd(), 'tmp'), // Local tmp in project
-    path.join(process.cwd(), '.tmp'), // Hidden tmp
-    '/tmp', // Unix standard temp
-    os.tmpdir(), // Node.js tmpdir
-    path.join(os.tmpdir(), 'ape-x-parse'), // Custom in os temp
+    '/tmp',
+    os.tmpdir(),
+    path.join(process.cwd(), '.vercel/tmp'),
+    path.join(process.cwd(), 'tmp'),
   ];
 
   for (const dir of candidates) {
@@ -34,22 +32,16 @@ function getTempDir(): string {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
-      // Test if we can write
       const testFile = path.join(dir, `.test-${Date.now()}`);
       fs.writeFileSync(testFile, 'test');
       fs.unlinkSync(testFile);
-      return dir; // Found a working directory
-    } catch (err) {
-      // This directory doesn't work, try next
+      return dir;
+    } catch {
       continue;
     }
   }
 
-  // If all fail, throw detailed error
-  throw new Error(
-    `No writable temp directory found. Tried: ${candidates.join(', ')}. ` +
-    `Last error: Unable to create or write to any temporary directory.`
-  );
+  throw new Error('No writable temp directory available');
 }
 
 /**
@@ -57,31 +49,32 @@ function getTempDir(): string {
  */
 async function parseDocx(filePath: string): Promise<string> {
   try {
+    // Static require for build-time resolution
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mammoth = require('mammoth');
 
-    if (!mammoth.extractRawText) {
-      throw new Error('mammoth.extractRawText not available');
+    if (!mammoth || !mammoth.extractRawText) {
+      throw new Error('mammoth module not properly loaded');
     }
 
     const result = await mammoth.extractRawText({ path: filePath });
-    const text = result.value || '';
-
-    if (!text || !text.trim()) {
-      throw new Error('DOCX file contains no extractable text');
+    if (!result || !result.value) {
+      throw new Error('No text extracted from DOCX');
     }
 
-    return text;
+    return result.value.trim();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`DOCX Error: ${msg}`);
+    throw new Error(`DOCX: ${err instanceof Error ? err.message : 'Parse error'}`);
   }
 }
 
 /**
- * Parse PDF using pdf-parse (Node.js compatible)
+ * Parse PDF using pdf-parse
  */
 async function parsePdf(filePath: string): Promise<string> {
   try {
+    // Static require for build-time resolution
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const PDFParse = require('pdf-parse');
 
     if (!PDFParse) {
@@ -89,69 +82,53 @@ async function parsePdf(filePath: string): Promise<string> {
     }
 
     const fileBuffer = fs.readFileSync(filePath);
-
     if (!fileBuffer || fileBuffer.length === 0) {
-      throw new Error('PDF file is empty or unreadable');
+      throw new Error('PDF file is empty');
     }
 
     const data = await PDFParse(fileBuffer);
-
     if (!data || !data.text) {
-      throw new Error('No text extracted from PDF — file may be image-based or encrypted');
+      throw new Error('No text in PDF - may be image-based or encrypted');
     }
 
-    const text = data.text.trim();
-
-    if (!text) {
-      throw new Error('PDF contains no readable text');
-    }
-
-    return text;
+    return data.text.trim();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`PDF Error: ${msg}`);
+    throw new Error(`PDF: ${err instanceof Error ? err.message : 'Parse error'}`);
   }
 }
 
 /**
- * Parse HTML by stripping tags
+ * Parse HTML
  */
 async function parseHtml(filePath: string): Promise<string> {
   try {
     if (!fs.existsSync(filePath)) {
-      throw new Error('HTML file not found at temp location');
+      throw new Error('File not found');
     }
 
     const content = fs.readFileSync(filePath, 'utf-8');
-
     if (!content) {
-      throw new Error('HTML file is empty');
+      throw new Error('File is empty');
     }
 
-    const text = content
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
+    const text = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     if (!text) {
-      throw new Error('HTML contains no readable text');
+      throw new Error('No text content found');
     }
 
     return text;
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`HTML Error: ${msg}`);
+    throw new Error(`HTML: ${err instanceof Error ? err.message : 'Parse error'}`);
   }
 }
 
 /**
- * Main API handler
+ * Main handler
  */
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<ParseResponse>
 ) {
-  // Only allow POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -160,77 +137,57 @@ export default async function handler(
   let filePath = '';
 
   try {
-    // Get working temp directory
+    // Get temp directory
     try {
       uploadDir = getTempDir();
-    } catch (tempErr) {
+    } catch (err) {
       return res.status(500).json({
-        error: 'Server configuration error',
-        details: tempErr instanceof Error ? tempErr.message : String(tempErr),
+        error: 'Server temp directory error',
+        details: err instanceof Error ? err.message : 'No writable directory',
       });
     }
 
-    // Initialize form parser with discovered temp directory
+    // Parse form
     const form = new IncomingForm({
       uploadDir,
       keepExtensions: true,
-      maxFileSize: 50 * 1024 * 1024, // 50MB
+      maxFileSize: 50 * 1024 * 1024,
     });
 
-    // Parse incoming form
     let fields, files;
     try {
       [fields, files] = await form.parse(req);
-    } catch (parseErr) {
+    } catch (err) {
       return res.status(400).json({
         error: 'File upload failed',
-        details: `Form parsing error: ${parseErr}`,
+        details: err instanceof Error ? err.message : 'Form parse error',
       });
     }
 
-    // Extract file from parsed form
+    // Get file
     const fileArray = Array.isArray(files.file) ? files.file : [files.file];
     const file = fileArray?.[0];
 
     if (!file) {
-      return res.status(400).json({
-        error: 'No file uploaded',
-        details: 'Please select a file to parse',
-      });
+      return res.status(400).json({ error: 'No file provided' });
     }
 
-    // Get file info
     filePath = (file as any).filepath || (file as any).path;
     const fileName = (file as any).originalFilename || (file as any).name || '';
 
     if (!filePath) {
-      return res.status(400).json({
-        error: 'File upload error',
-        details: 'Uploaded file has no path',
-      });
+      return res.status(400).json({ error: 'File path missing' });
     }
 
-    // Verify file exists
-    if (!fs.existsSync(filePath)) {
-      return res.status(500).json({
-        error: 'Server error',
-        details: `Uploaded file not found at: ${filePath}`,
-      });
-    }
-
-    // Get file extension
+    // Get extension
     const ext = path.extname(fileName).toLowerCase().slice(1);
-
     if (!ext) {
-      return res.status(400).json({
-        error: 'Invalid file',
-        details: 'File has no extension. Use .html, .docx, or .pdf',
-      });
+      return res.status(400).json({ error: 'File has no extension' });
     }
 
     let text = '';
 
-    // Parse based on file type
+    // Parse by type
     try {
       if (ext === 'html' || ext === 'htm') {
         text = await parseHtml(filePath);
@@ -240,44 +197,35 @@ export default async function handler(
         text = await parsePdf(filePath);
       } else {
         return res.status(400).json({
-          error: `Unsupported file type: .${ext}`,
-          details: 'Supported formats: .html, .docx, .pdf',
+          error: `Unsupported: .${ext}`,
+          details: 'Use .html, .docx, or .pdf',
         });
       }
     } catch (parseErr) {
-      const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
-      return res.status(400).json({
-        error: 'Parse failed',
-        details: msg,
-      });
+      const msg = parseErr instanceof Error ? parseErr.message : 'Unknown error';
+      return res.status(400).json({ error: 'Parse failed', details: msg });
     }
 
-    // Validate we got text
-    if (!text || text.trim().length === 0) {
+    // Validate text
+    if (!text || text.length === 0) {
       return res.status(400).json({
         error: 'No text extracted',
-        details: 'File exists but contains no readable text. Try a different file format.',
+        details: 'File may be empty, image-based, or corrupted',
       });
     }
 
-    // Return success (limit response size to 50KB)
-    return res.status(200).json({
-      text: text.substring(0, 50000),
-    });
+    return res.status(200).json({ text: text.substring(0, 50000) });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('parse-resume API error:', msg, 'uploadDir:', uploadDir);
-    return res.status(500).json({
-      error: 'Server error',
-      details: msg,
-    });
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[parse-resume] Error:', msg, 'uploadDir:', uploadDir);
+    return res.status(500).json({ error: 'Server error', details: msg });
   } finally {
-    // Always clean up temp file
+    // Cleanup
     if (filePath && fs.existsSync(filePath)) {
       try {
         fs.unlinkSync(filePath);
-      } catch (unlinkErr) {
-        console.error('Failed to cleanup temp file:', unlinkErr);
+      } catch {
+        // Ignore cleanup errors
       }
     }
   }
