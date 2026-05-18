@@ -80,7 +80,7 @@ async function parseDocx(filePath: string): Promise<string> {
 async function parsePdf(filePath: string): Promise<string> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const pdfParse = require('pdf-parse');
+    const { PDFParse } = require('pdf-parse');
 
     console.log('[parse-resume] Reading PDF file:', filePath);
     const fileBuffer = fs.readFileSync(filePath);
@@ -89,14 +89,18 @@ async function parsePdf(filePath: string): Promise<string> {
     }
 
     console.log('[parse-resume] Parsing PDF buffer, size:', fileBuffer.length);
-    const result = await pdfParse(fileBuffer);
+    const parser = new PDFParse({ data: fileBuffer });
+    const result = await parser.getText();
     console.log('[parse-resume] PDF parsed, text length:', result?.text?.length || 0);
-    
+
     if (!result || !result.text) {
       throw new Error('No text in PDF - may be image-based or encrypted');
     }
 
-    return result.text.trim();
+    await parser.destroy();
+    // Strip page markers added by pdf-parse v2
+    const text = result.text.replace(/-- \d+ of \d+ --/g, '').replace(/\n{3,}/g, '\n\n').trim();
+    return text;
   } catch (err) {
     console.error('[parse-resume] PDF parsing error:', err);
     throw new Error(`PDF: ${err instanceof Error ? err.message : 'Parse error'}`);
