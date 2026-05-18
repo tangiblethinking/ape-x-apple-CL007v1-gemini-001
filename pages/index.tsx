@@ -95,16 +95,17 @@ async function parseFile(file: File): Promise<string> {
   const ext = file.name.split('.').pop()?.toLowerCase();
   if (ext==='html'||ext==='htm') return await file.text();
   if (ext==='docx') {
-    const mammoth = (await import('mammoth')).default;
+    const { default: mammoth } = await import('mammoth');
     const buf = await file.arrayBuffer();
     const result = await mammoth.extractRawText({arrayBuffer:buf});
     return result.value;
   }
   if (ext==='pdf') {
     const pdfjsLib = await import('pdfjs-dist');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+    const { getDocument, GlobalWorkerOptions } = pdfjsLib;
+    GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
     const buf = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+    const pdf = await getDocument({data:buf}).promise;
     let text = '';
     for (let i=1;i<=pdf.numPages;i++) {
       const page = await pdf.getPage(i);
