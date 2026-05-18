@@ -184,35 +184,55 @@ export default async function handler(
       });
     }
 
-    // Debug: Log what we got
-    console.log('[parse-resume] Files received:', Object.keys(files));
-    console.log('[parse-resume] Files.file type:', Array.isArray(files.file) ? 'array' : typeof files.file);
-
-    // Get file - files.file can be array or single object
+    // Handle formidable v3 output - files is a Map-like object
+    console.log('[parse-resume] Files keys:', Object.keys(files || {}));
+    
     let file;
-    if (Array.isArray(files.file)) {
-      file = files.file[0];
-    } else if (files.file) {
-      file = files.file;
-    }
-
-    if (!file) {
-      console.error('[parse-resume] No file in files object');
+    if (!files || !files.file) {
+      console.error('[parse-resume] No files.file in parse result');
       return res.status(400).json({ error: 'No file provided' });
     }
 
-    filePath = (file as any).filepath || (file as any).path;
-    const fileName = (file as any).originalFilename || (file as any).name || file.newFilename || '';
+    // files.file could be array or single
+    const fileArray = Array.isArray(files.file) ? files.file : [files.file];
+    file = fileArray?.[0];
 
-    console.log('[parse-resume] File path:', filePath);
-    console.log('[parse-resume] File name:', fileName);
+    if (!file) {
+      console.error('[parse-resume] File array empty');
+      return res.status(400).json({ error: 'No file provided' });
+    }
+    
+    console.log('[parse-resume] File object keys:', Object.keys(file || {}));
 
-    if (!filePath || !fs.existsSync(filePath)) {
-      console.error('[parse-resume] File path missing or does not exist:', filePath);
-      return res.status(400).json({ error: 'File path missing or invalid' });
+    filePath = (file as any).filepath || (file as any).path || (file as any).pathName || '';
+    const fileName = (file as any).originalFilename || (file as any).name || (file as any).filename || '';
+
+    console.log('[parse-resume] File properties:', {
+      filepath: (file as any).filepath,
+      path: (file as any).path,
+      pathName: (file as any).pathName,
+      originalFilename: (file as any).originalFilename,
+      name: (file as any).name,
+      filename: (file as any).filename,
+      extracted_filePath: filePath,
+      extracted_fileName: fileName,
+    });
+
+    if (!filePath) {
+      console.error('[parse-resume] Could not extract file path from file object');
+      return res.status(400).json({ error: 'File path missing', details: JSON.stringify(Object.keys(file)) });
     }
 
-    // Get extension
+    // Validate file exists
+    if (!fs.existsSync(filePath)) {
+      console.error('[parse-resume] File path does not exist:', filePath);
+      console.error('[parse-resume] Listing uploadDir contents:', fs.readdirSync(uploadDir).slice(0, 10));
+      return res.status(400).json({ error: 'File not found on disk', details: filePath });
+    }
+
+    const fileStats = fs.statSync(filePath);
+    console.log('[parse-resume] File size:', fileStats.size, 'bytes');
+    
     const ext = path.extname(fileName).toLowerCase().slice(1);
     if (!ext) {
       console.error('[parse-resume] File has no extension:', fileName);
