@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  basePath: '/ape',
+  assetPrefix: '/ape',
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
@@ -9,8 +11,6 @@ const nextConfig = {
       };
     }
     if (isServer) {
-      // Do not bundle pdfjs-dist — let Node.js require() it at runtime
-      // This preserves the relative './pdf.worker.js' path resolution
       const existingExternals = config.externals || [];
       config.externals = [
         ...(Array.isArray(existingExternals) ? existingExternals : [existingExternals]),
