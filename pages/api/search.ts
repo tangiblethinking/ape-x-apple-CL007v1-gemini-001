@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { extractStateCodes, validateLocationInput } from '../../lib/location-validator';
 
-// ── JSON repair: close unclosed arrays/objects from truncated Claude output ──
+// JSON repair helper
 function repairJson(raw: string): string {
   let s = raw.trim();
   s = s.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -27,71 +27,56 @@ function repairJson(raw: string): string {
   return '[]';
 }
 
-
-// Extract target titles from instruction text
 function extractTitles(instructions: string): string[] {
   const match = instructions.match(/TARGET TITLES:\s*(.+)/);
   if (!match) return [];
-  return match[1]
-    .split(',')
-    .map(t => t.trim())
-    .filter(t => t && t !== '[Complete Setup Wizard to configure]');
+  return match[1].split(',').map(t => t.trim()).filter(t => t && t !== '[Complete Setup Wizard to configure]');
 }
 
-// Extract location preferences from instruction text
 function extractLocations(instructions: string): string[] {
   const match = instructions.match(/Location:\s*(.+)/);
   if (!match) return [];
   return extractStateCodes(match[1]);
 }
 
-// Build Serper queries from user's actual titles
 function buildQueries(titles: string[], locations: string[]): string[] {
   if (!titles.length) return [];
-
   const currentYear = new Date().getFullYear();
   const queries: string[] = [];
   const locationStr = locations.length ? locations.slice(0, 3).join(' OR ') : 'Remote';
   const isRemote = locationStr.toLowerCase().includes('remote');
-
-  // One query per title (up to 4)
-  for (const title of titles.slice(0, 4)) {
-    queries.push(`"${title}" remote ${currentYear}`);
-  }
-
-  // Location-based queries for non-remote
+  for (const title of titles.slice(0, 4)) { queries.push(`"${title}" remote ${currentYear}`); }
   if (!isRemote && locations.length) {
-    for (const title of titles.slice(0, 2)) {
-      queries.push(`"${title}" ${locationStr} ${currentYear}`);
-    }
+    for (const title of titles.slice(0, 2)) { queries.push(`"${title}" ${locationStr} ${currentYear}`); }
   }
-
-  // ATS-specific queries for top 2 titles
   for (const title of titles.slice(0, 2)) {
     queries.push(`site:greenhouse.io "${title}" ${currentYear}`);
     queries.push(`site:lever.co "${title}" ${currentYear}`);
   }
-
-  return queries.slice(0, 8); // cap at 8 queries
+  return queries.slice(0, 8);
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { instructions, specialInstructions, apiKeyOverride, serperKeyOverride } = req.body;
+  const aiProvider: string = req.body.aiProvider || 'claude';
 
-  const anthropicKey = apiKeyOverride || process.env.ANTHROPIC_API_KEY;
+  const anthropicKey: string | undefined = aiProvider === 'claude' ? (apiKeyOverride || process.env.ANTHROPIC_API_KEY) : undefined;
+  const geminiKey: string | undefined = aiProvider === 'gemini' ? (apiKeyOverride || process.env.GEMINI_API_KEY) : undefined;
   const serperKey = serperKeyOverride || process.env.SERPER_API_KEY;
 
-  if (!anthropicKey) return res.status(400).json({ error: 'No Anthropic API key configured. Add it in Settings.' });
-  if (!serperKey) return res.status(400).json({ error: 'No Serper API key configured. Add it in Settings.' });
+  if (aiProvider === 'claude' && !anthropicKey)
+    return res.status(400).json({ error: 'No Anthropic API key configured. Add it in Settings.' });
+  if (aiProvider === 'gemini' && !geminiKey)
+    return res.status(400).json({ error: 'No Gemini API key configured. Add it in Settings.' });
+  if (!serperKey)
+    return res.status(400).json({ error: 'No Serper API key configured. Add it in Settings.' });
 
   try {
-    // Build queries from user's actual target titles
     const userTitles = extractTitles(instructions);
     const locationRaw = (instructions.match(/Location:\s*(.+)/)?.[1] || '').trim();
 
-    // Backend location validation
     if (locationRaw && locationRaw.toLowerCase() !== 'remote') {
       const locValidation = validateLocationInput(locationRaw);
       if (!locValidation.valid) {
@@ -101,20 +86,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const userLocations = extractLocations(instructions);
     const searchQueries = buildQueries(userTitles, userLocations);
-
     const searchResults: string[] = [];
 
     for (const query of searchQueries) {
       try {
         const serperRes = await fetch('https://google.serper.dev/search', {
           method: 'POST',
-          headers: {
-            'X-API-KEY': serperKey,
-            'Content-Type': 'application/json',
-          },
+          headers: { 'X-API-KEY': serperKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({ q: query, num: 10, tbs: 'qdr:w' }),
         });
-
         if (serperRes.ok) {
           const data = await serperRes.json();
           const results = (data.organic || []).map((r: { title: string; link: string; snippet: string }) =>
@@ -122,9 +102,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ).join('\n---\n');
           if (results) searchResults.push(`QUERY: "${query}"\nRESULTS:\n${results}`);
         }
-      } catch {
-        // Continue on individual search failure
-      }
+      } catch { /* continue */ }
     }
 
     const combinedResults = searchResults.join('\n\n========\n\n');
@@ -133,17 +111,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ? `${instructions}\n\n━━━━━━━━━━━━━━━━━━━━\nSPECIAL OVERRIDE INSTRUCTIONS FOR THIS SEARCH:\n${specialInstructions}\n━━━━━━━━━━━━━━━━━━━━`
       : instructions;
 
-    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 16000,
-        system: `${finalInstructions}
+    const systemPromptFull = `${finalInstructions}
 
 IMPORTANT: You have been given real search results from Google. Your job is to:
 1. Parse these search results to identify genuine job postings matching the TARGET TITLES in these instructions
@@ -164,23 +132,56 @@ Flag aggregator re-posts (Indeed, LinkedIn, ZipRecruiter) and find direct compan
 Today's date is ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.
 
 The target titles searched were: ${userTitles.join(', ') || '[not configured]'}
-Prioritize results that match these exact titles or very close variants.`,
-        messages: [
-          {
-            role: 'user',
-            content: `Here are the live search results for the target titles. Process them per your instructions and return the JSON array:\n\n${combinedResults}`,
-          },
-        ],
-      }),
-    });
+Prioritize results that match these exact titles or very close variants.`;
 
-    if (!claudeRes.ok) {
-      const err = await claudeRes.json();
-      return res.status(claudeRes.status).json({ error: err.error?.message || 'Claude API error' });
+    const userMessageContent = `Here are the live search results for the target titles. Process them per your instructions and return the JSON array:\n\n${combinedResults}`;
+
+    let rawText = '[]';
+
+    if (aiProvider === 'gemini') {
+      // FIX BUG2: Gemini path
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: userMessageContent }] }],
+            systemInstruction: { parts: [{ text: systemPromptFull }] },
+            generationConfig: { maxOutputTokens: 16000, temperature: 0.1 }
+          }),
+        }
+      );
+      if (!geminiRes.ok) {
+        const err = await geminiRes.json();
+        return res.status(geminiRes.status).json({ error: err.error?.message || 'Gemini API error' });
+      }
+      const geminiData = await geminiRes.json();
+      rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+    } else {
+      // CLAUDE PATH (unchanged)
+      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': anthropicKey!,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-5-20250929',
+          max_tokens: 16000,
+          system: systemPromptFull,
+          messages: [{ role: 'user', content: userMessageContent }],
+        }),
+      });
+      if (!claudeRes.ok) {
+        const err = await claudeRes.json();
+        return res.status(claudeRes.status).json({ error: err.error?.message || 'Claude API error' });
+      }
+      const claudeData = await claudeRes.json();
+      rawText = claudeData.content?.[0]?.text || '[]';
     }
 
-    const claudeData = await claudeRes.json();
-    const rawText = claudeData.content?.[0]?.text || '[]';
     const cleaned = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
     let jobs;
