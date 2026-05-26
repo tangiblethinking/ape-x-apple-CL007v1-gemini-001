@@ -38,9 +38,21 @@ async function parseDocx(filePath: string): Promise<string> {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mammoth = require('mammoth');
     if (!mammoth || !mammoth.extractRawText) throw new Error('mammoth module not loaded');
+    // Extract raw text
     const result = await mammoth.extractRawText({ path: filePath });
     if (!result || !result.value) throw new Error('No text extracted from DOCX');
-    return result.value.trim();
+    let text = result.value.trim();
+    // Also extract hyperlinks via HTML conversion
+    try {
+      const htmlResult = await mammoth.convertToHtml({ path: filePath });
+      const hrefs = [...(htmlResult.value || '').matchAll(/href="(https?:\/\/[^"]+)"/g)]
+        .map((m: RegExpMatchArray) => m[1])
+        .filter((url: string, i: number, arr: string[]) => arr.indexOf(url) === i);
+      if (hrefs.length > 0) {
+        text += '\n\nEMBEDDED LINKS:\n' + hrefs.join('\n');
+      }
+    } catch { /* ignore link extraction errors */ }
+    return text;
   } catch (err) {
     throw new Error(`DOCX: ${err instanceof Error ? err.message : 'Parse error'}`);
   }
@@ -62,13 +74,27 @@ async function parsePdf(filePath: string): Promise<string> {
       useSystemFonts: true,
     }).promise;
     let text = '';
+    const embeddedLinks: string[] = [];
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
       text += content.items.map((item: any) => ('str' in item ? item.str : '')).join(' ') + '\n';
+      // Extract hyperlink annotations not present in text layer
+      try {
+        const annotations = await page.getAnnotations();
+        for (const ann of annotations) {
+          const url = ann.url || ann.unsafeUrl;
+          if (url && typeof url === 'string' && url.startsWith('http') && !embeddedLinks.includes(url)) {
+            embeddedLinks.push(url);
+          }
+        }
+      } catch { /* ignore annotation errors */ }
     }
     text = text.replace(/\s{3,}/g, '  ').trim();
     if (!text) throw new Error('No text in PDF - may be image-based or encrypted');
+    if (embeddedLinks.length > 0) {
+      text += '\n\nEMBEDDED LINKS:\n' + embeddedLinks.join('\n');
+    }
     return text;
   } catch (err) {
     throw new Error(`PDF: ${err instanceof Error ? err.message : 'Parse error'}`);

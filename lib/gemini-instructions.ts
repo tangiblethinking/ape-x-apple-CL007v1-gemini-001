@@ -20,10 +20,20 @@ export function getGeminiSearchPrompt(
     ? `\nSPECIAL INSTRUCTIONS: ${specialInstructions}`
     : '';
 
+  // FIX BUG 1: Dynamic text injection to avoid dropping empty title queries down a broken fallback path
+  const titlesListText = titlesSearched.length > 0
+    ? titlesSearched.join(', ')
+    : 'Any role relevant to the target career track and skill set embedded in the user profile context';
+
+  // FIX BUG 2: Contextualizing instructions for Flash so it handles structural synonym matching gracefully
+  const evaluationStep2Text = titlesSearched.length > 0
+    ? '2. Confirm the title matches, is a close variant, or is a semantic synonym of the TITLES listed above (allow adjacent levels, synonyms, and discipline variations)'
+    : '2. Confirm the title matches the candidate\'s professional track, core disciplines, or skill competencies semantically';
+
   return `${userInstructions}${special}
 
 DATE: ${today}
-TITLES: ${titlesSearched.join(', ') || 'see instructions above'}
+TITLES: ${titlesListText}
 
 TASK: Convert job search results into structured job card objects.
 
@@ -31,7 +41,7 @@ INPUT FORMAT: Each result is prefixed [ATS], [AGG-V], or [AGG-U] followed by Com
 
 EVALUATION STEPS:
 1. Confirm the result is an active job posting (not a news article, press release, or generic careers page)
-2. Confirm the title matches or closely variants the TITLES listed above
+${evaluationStep2Text}
 3. Confirm seniority is appropriate — exclude clearly junior or executive-level mismatches
 4. Assign a rating: 9-10 (near-perfect match), 7-8 (strong with one gap), 5-6 (solid with gaps), below 5 (exclude)
 
@@ -49,9 +59,6 @@ Output the JSON array only.`;
 }
 
 // ── Profile Extractor ────────────────────────────────────────
-// Gemini-specific: positive framing, explicit step-by-step protocol,
-// every field listed with example. Pairs with the responseSchema defined
-// in lib/ai-providers.ts which acts as a hard structural constraint.
 export function getGeminiExtractProfilePrompt(): string {
   return `TASK: Extract structured profile data from the resume and return a single JSON object that matches the response schema exactly.
 

@@ -67,10 +67,52 @@ async function parseDocx(filePath: string): Promise<string> {
       throw new Error('No text extracted from DOCX');
     }
 
-    return result.value.trim();
+    let text = result.value.trim();
+
+    // Extract embedded hyperlinks via HTML conversion
+    try {
+      const htmlResult = await mammoth.convertToHtml({ path: filePath });
+      const hrefs = [...(htmlResult.value || '').matchAll(/href="(https?:\/\/[^"]+)"/g)]
+        .map((m: RegExpMatchArray) => m[1])
+        .filter((url: string, i: number, arr: string[]) => arr.indexOf(url) === i);
+      if (hrefs.length > 0) {
+        console.log('[parse-resume] Found', hrefs.length, 'embedded links in DOCX');
+        text += '\n\nEMBEDDED LINKS:\n' + hrefs.join('\n');
+      }
+    } catch { /* ignore link extraction errors */ }
+
+    return text;
   } catch (err) {
     console.error('[parse-resume] DOCX parsing error:', err);
     throw new Error(`DOCX: ${err instanceof Error ? err.message : 'Parse error'}`);
+  }
+}
+
+/**
+ * Extract hyperlink annotations from a PDF (embedded link URLs not in text layer).
+ */
+async function extractPdfLinks(pdfjsLib: any, data: Uint8Array): Promise<string[]> {
+  try {
+    const pdf = await pdfjsLib.getDocument({
+      data,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true,
+    }).promise;
+    const urls: string[] = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const annotations = await page.getAnnotations();
+      for (const ann of annotations) {
+        const url = ann.url || ann.unsafeUrl;
+        if (url && typeof url === 'string' && url.startsWith('http') && !urls.includes(url)) {
+          urls.push(url);
+        }
+      }
+    }
+    return urls;
+  } catch {
+    return [];
   }
 }
 
@@ -117,6 +159,13 @@ async function parsePdf(filePath: string): Promise<string> {
 
     if (!text) {
       throw new Error('No text in PDF - may be image-based or encrypted');
+    }
+
+    // Extract embedded hyperlink annotations (not in text layer)
+    const links = await extractPdfLinks(pdfjsLib, data);
+    if (links.length > 0) {
+      console.log('[parse-resume] Found', links.length, 'embedded links in PDF');
+      text += '\n\nEMBEDDED LINKS:\n' + links.join('\n');
     }
 
     return text;
