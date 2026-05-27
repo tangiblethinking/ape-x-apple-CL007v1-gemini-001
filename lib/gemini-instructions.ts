@@ -45,17 +45,11 @@ ${evaluationStep2Text}
 3. Confirm seniority is appropriate — exclude clearly junior or executive-level mismatches
 4. Assign a rating: 9-10 (near-perfect match), 7-8 (strong with one gap), 5-6 (solid with gaps), below 5 (exclude)
 
-OUTPUT: A single JSON array. No text before or after. No markdown.
-
-Schema for each PASSING job:
-{"id":"company-title-slug","company":"string","title":"string","category":"director|senior-director|manager|vp","isRemote":true,"isHybrid":false,"isOnsite":false,"location":"City ST or empty","industry":["sector"],"salaryMin":0,"salaryMax":0,"salaryDisplay":"$0 — Not Listed","salaryNote":"Not Listed","rating":7,"auditLabel":"✓ Direct ATS Verified ${today}","roleSummary":"2-3 sentence role description","whyYouFit":["fit point 1","fit point 2","fit point 3"],"requirements":["req 1","req 2","req 3"],"companyInfo":"2-3 sentence company description","goldFlags":["positive signal"],"redFlags":["concern"],"applyUrl":"url","careersUrl":"url","aboutUrl":"url","jobDescUrl":"url","postedDate":"YYYY-MM-DD","excluded":false}
+OUTPUT: Output format is constrained by the response schema. Populate every field for passing jobs. For excluded jobs, set excluded=true and populate id, company, title, layerFailed, reason.
 
 auditLabel values: "✓ Direct ATS Verified ${today}" for [ATS] | "✓ Company Domain Verified ${today}" for [AGG-V] | "✓ Aggregator Listed ${today}" for [AGG-U]
 
-Schema for each EXCLUDED job:
-{"id":"company-title-slug","company":"string","title":"string","layerFailed":"Layer 1|Layer 2|Layer 3","reason":"specific reason","excluded":true}
-
-Output the JSON array only.`;
+Output the JSON only.`;
 }
 
 // ── Profile Extractor ────────────────────────────────────────

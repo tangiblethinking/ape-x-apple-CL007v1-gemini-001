@@ -137,10 +137,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let jobs;
     try {
       const jsonStr = extractJSON(aiResponse.text);
-      jobs = JSON.parse(jsonStr);
+      const parsed = JSON.parse(jsonStr);
+      // Gemini returns { jobs: [...] } via OBJECT schema; Claude returns [...] directly
+      jobs = Array.isArray(parsed) ? parsed : (parsed.jobs || []);
     } catch {
       try {
-        jobs = JSON.parse(repairJson(aiResponse.text));
+        const parsed = JSON.parse(repairJson(aiResponse.text));
+        jobs = Array.isArray(parsed) ? parsed : (parsed.jobs || []);
       } catch {
         return res.status(500).json({ error: `Failed to parse job results. Raw length: ${aiResponse.text.length}` });
       }

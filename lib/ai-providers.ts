@@ -250,7 +250,7 @@ async function callGeminiAPI(
       const body: Record<string, unknown> = {
         contents,
         generationConfig: {
-          maxOutputTokens: maxTokens,
+          maxOutputTokens: Math.min(maxTokens, 8192),
           temperature: 0.1,
           ...(responseSchema && {
             responseMimeType: 'application/json',
@@ -389,7 +389,7 @@ async function callGeminiWithFileSearch(
           },
         ],
         generationConfig: {
-          maxOutputTokens: maxTokens,
+          maxOutputTokens: Math.min(maxTokens, 8192),
           temperature: 0.1,
           responseMimeType: 'application/json',
           responseSchema: effectiveSchema
@@ -504,42 +504,48 @@ export const GEMINI_PROFILE_SCHEMA = GEMINI_JSON_SCHEMA;
 // Job-card array schema for the search-pass2 endpoint. Keep flat per Gemini
 // best practices (long descriptions and arrays-of-objects only at top level).
 export const GEMINI_JOB_ARRAY_SCHEMA = {
-  type: 'ARRAY',
-  items: {
-    type: 'OBJECT',
-    properties: {
-      id: { type: 'STRING' },
-      company: { type: 'STRING' },
-      title: { type: 'STRING' },
-      category: { type: 'STRING' },
-      isRemote: { type: 'BOOLEAN' },
-      isHybrid: { type: 'BOOLEAN' },
-      isOnsite: { type: 'BOOLEAN' },
-      location: { type: 'STRING' },
-      industry: { type: 'ARRAY', items: { type: 'STRING' } },
-      salaryMin: { type: 'NUMBER' },
-      salaryMax: { type: 'NUMBER' },
-      salaryDisplay: { type: 'STRING' },
-      salaryNote: { type: 'STRING' },
-      rating: { type: 'NUMBER' },
-      auditLabel: { type: 'STRING' },
-      roleSummary: { type: 'STRING' },
-      whyYouFit: { type: 'ARRAY', items: { type: 'STRING' } },
-      requirements: { type: 'ARRAY', items: { type: 'STRING' } },
-      companyInfo: { type: 'STRING' },
-      goldFlags: { type: 'ARRAY', items: { type: 'STRING' } },
-      redFlags: { type: 'ARRAY', items: { type: 'STRING' } },
-      applyUrl: { type: 'STRING' },
-      careersUrl: { type: 'STRING' },
-      aboutUrl: { type: 'STRING' },
-      jobDescUrl: { type: 'STRING' },
-      postedDate: { type: 'STRING' },
-      excluded: { type: 'BOOLEAN' },
-      layerFailed: { type: 'STRING' },
-      reason: { type: 'STRING' }
-    },
-    required: ['id', 'company', 'title', 'excluded']
-  }
+  type: 'OBJECT',
+  properties: {
+    jobs: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          id: { type: 'STRING' },
+          company: { type: 'STRING' },
+          title: { type: 'STRING' },
+          category: { type: 'STRING' },
+          isRemote: { type: 'BOOLEAN' },
+          isHybrid: { type: 'BOOLEAN' },
+          isOnsite: { type: 'BOOLEAN' },
+          location: { type: 'STRING' },
+          industry: { type: 'ARRAY', items: { type: 'STRING' } },
+          salaryMin: { type: 'NUMBER' },
+          salaryMax: { type: 'NUMBER' },
+          salaryDisplay: { type: 'STRING' },
+          salaryNote: { type: 'STRING' },
+          rating: { type: 'NUMBER' },
+          auditLabel: { type: 'STRING' },
+          roleSummary: { type: 'STRING' },
+          whyYouFit: { type: 'ARRAY', items: { type: 'STRING' } },
+          requirements: { type: 'ARRAY', items: { type: 'STRING' } },
+          companyInfo: { type: 'STRING' },
+          goldFlags: { type: 'ARRAY', items: { type: 'STRING' } },
+          redFlags: { type: 'ARRAY', items: { type: 'STRING' } },
+          applyUrl: { type: 'STRING' },
+          careersUrl: { type: 'STRING' },
+          aboutUrl: { type: 'STRING' },
+          jobDescUrl: { type: 'STRING' },
+          postedDate: { type: 'STRING' },
+          excluded: { type: 'BOOLEAN' },
+          layerFailed: { type: 'STRING' },
+          reason: { type: 'STRING' }
+        },
+        required: ['id', 'company', 'title', 'excluded']
+      }
+    }
+  },
+  required: ['jobs']
 };
 
 // Single job-card object schema for analyze-job endpoint.

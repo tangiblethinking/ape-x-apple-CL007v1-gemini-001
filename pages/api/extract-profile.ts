@@ -42,7 +42,19 @@ export default async function handler(
     }
 
     const systemPrompt = getGeminiExtractProfilePrompt();
-    const extractionQuery = `Analyze the attached resume file and extract every field defined in the response schema. Follow the step-by-step extraction protocol from your system instructions. Output a single JSON object only.`;
+
+    // Forward embedded hyperlinks extracted by parse-resume (pdfjs-dist annotations)
+    // that Gemini's native PDF reader cannot see in the text layer
+    let linksSuffix = '';
+    if (resumeText) {
+      const marker = '\n\nEMBEDDED LINKS:\n';
+      const idx = resumeText.indexOf(marker);
+      if (idx !== -1) {
+        linksSuffix = resumeText.slice(idx);
+      }
+    }
+
+    const extractionQuery = `Analyze the attached resume file and extract every field defined in the response schema. Follow the step-by-step extraction protocol from your system instructions. Output a single JSON object only.${linksSuffix ? '\n\nThe following embedded hyperlinks were found in the document but may not be visible in the PDF text layer:' + linksSuffix : ''}`;
 
     try {
       const aiResponse = await callAIWithFileSearch(
